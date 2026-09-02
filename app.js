@@ -165,11 +165,6 @@ function afficherApplication(profil) {
     <button onclick="dues()">Cotisations</button>
   `;
 
-  /*
-    role_id = 1
-    correspond au Président / Administrateur principal.
-  */
-
   if (Number(profil.role_id) === 1) {
     boutons += `
       <button onclick="members()">Membres</button>
@@ -426,25 +421,11 @@ function finance() {
         Ce module permettra de suivre :
       </p>
 
-      <p>
-        • les cotisations
-      </p>
-
-      <p>
-        • les paiements
-      </p>
-
-      <p>
-        • les retards
-      </p>
-
-      <p>
-        • les recettes
-      </p>
-
-      <p>
-        • les synthèses financières
-      </p>
+      <p>• les cotisations</p>
+      <p>• les paiements</p>
+      <p>• les retards</p>
+      <p>• les recettes</p>
+      <p>• les synthèses financières</p>
 
     </div>
   `;
@@ -499,14 +480,8 @@ async function verifierSession() {
   } =
     await supabaseClient.auth.getSession();
 
-  if (
-    session &&
-    session.user
-  ) {
-    await chargerProfil(
-      session.user
-    );
-
+  if (session && session.user) {
+    await chargerProfil(session.user);
     return;
   }
 
