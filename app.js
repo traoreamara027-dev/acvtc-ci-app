@@ -8,23 +8,15 @@ const supabaseClient = window.supabase.createClient(
 
 let profilActuel = null;
 
-function nomSection(sectionId) {
-  const sections = {
-    1: 'Abidjan',
-    2: 'Bouaké',
-    3: 'Yamoussoukro'
-  };
+let sectionsCache = {
+  1: 'Abidjan',
+  2: 'Bouaké',
+  3: 'Yamoussoukro'
+};
 
-  return sections[Number(sectionId)] || `Section ${sectionId || '-'}`;
-}
-
-function nomRole(roleId) {
-  const roles = {
-    1: 'Président'
-  };
-
-  return roles[Number(roleId)] || `Rôle ${roleId || '-'}`;
-}
+let rolesCache = {
+  1: 'Président'
+};
 
 function echapperHtml(valeur) {
   return String(valeur ?? '')
@@ -33,6 +25,34 @@ function echapperHtml(valeur) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function nomSection(sectionId) {
+  return sectionsCache[Number(sectionId)] || `Section ${sectionId || '-'}`;
+}
+
+function nomRole(roleId) {
+  return rolesCache[Number(roleId)] || `Rôle ${roleId || '-'}`;
+}
+
+async function chargerReferentiels() {
+  const { data: sections, error: erreurSections } =
+    await supabaseClient.rpc('list_sections');
+
+  if (!erreurSections && Array.isArray(sections)) {
+    sections.forEach((s) => {
+      sectionsCache[Number(s.id)] = s.nom;
+    });
+  }
+
+  const { data: roles, error: erreurRoles } =
+    await supabaseClient.rpc('list_roles');
+
+  if (!erreurRoles && Array.isArray(roles)) {
+    roles.forEach((r) => {
+      rolesCache[Number(r.id)] = r.nom;
+    });
+  }
 }
 
 /* =========================
@@ -53,14 +73,13 @@ function messageConnexion(message, erreur = false) {
 ========================= */
 
 async function login() {
-  const email = document
-    .getElementById('user')
-    .value
-    .trim();
+  const champEmail = document.getElementById('user');
+  const champPass = document.getElementById('pass');
 
-  const password = document
-    .getElementById('pass')
-    .value;
+  if (!champEmail || !champPass) return;
+
+  const email = champEmail.value.trim();
+  const password = champPass.value;
 
   if (!email || !password) {
     messageConnexion(
@@ -79,7 +98,7 @@ async function login() {
     });
 
   if (error) {
-    console.error('Erreur connexion :', error);
+    console.error(error);
 
     messageConnexion(
       'Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.',
@@ -88,7 +107,7 @@ async function login() {
     return;
   }
 
-  if (!data || !data.user) {
+  if (!data?.user) {
     messageConnexion('Utilisateur introuvable.', true);
     return;
   }
@@ -97,10 +116,12 @@ async function login() {
 }
 
 /* =========================
-   CHARGEMENT DU PROFIL
+   PROFIL
 ========================= */
 
 async function chargerProfil(user) {
+  await chargerReferentiels();
+
   const { data: profil, error } =
     await supabaseClient
       .from('profiles')
@@ -110,11 +131,9 @@ async function chargerProfil(user) {
       .eq('id', user.id)
       .single();
 
-  if (error) {
-    console.error('Erreur profil :', error);
-  }
-
   if (error || !profil) {
+    console.error(error);
+
     messageConnexion(
       'Compte connecté, mais le profil ACVTC-CI est introuvable.',
       true
@@ -145,19 +164,19 @@ async function chargerProfil(user) {
 }
 
 /* =========================
-   AFFICHAGE APPLICATION
+   APPLICATION
 ========================= */
 
 function afficherApplication(profil) {
   const loginZone = document.getElementById('login');
   const appZone = document.getElementById('app');
-  const boutonDeconnexion = document.getElementById('out');
+  const boutonOut = document.getElementById('out');
+  const nav = document.getElementById('nav');
 
   if (loginZone) loginZone.classList.add('hide');
   if (appZone) appZone.classList.remove('hide');
-  if (boutonDeconnexion) boutonDeconnexion.classList.remove('hide');
+  if (boutonOut) boutonOut.classList.remove('hide');
 
-  const nav = document.getElementById('nav');
   if (!nav) return;
 
   let boutons = `
@@ -174,6 +193,7 @@ function afficherApplication(profil) {
   }
 
   nav.innerHTML = boutons;
+
   home();
 }
 
@@ -190,7 +210,8 @@ function home() {
   content.innerHTML = `
     <div class="card">
       <h2>
-        Bienvenue ${echapperHtml(profilActuel.prenoms || '')}
+        Bienvenue
+        ${echapperHtml(profilActuel.prenoms || '')}
         ${echapperHtml(profilActuel.nom || '')}
       </h2>
 
@@ -214,16 +235,13 @@ function home() {
         ${echapperHtml(nomRole(profilActuel.role_id))}
       </p>
 
-      <p>
-        <b>Statut :</b>
-        Compte actif
-      </p>
+      <p><b>Statut :</b> Compte actif</p>
     </div>
   `;
 }
 
 /* =========================
-   CARTE DE MEMBRE
+   CARTE
 ========================= */
 
 function card() {
@@ -232,10 +250,8 @@ function card() {
   const content = document.getElementById('content');
   if (!content) return;
 
-  let photo = '';
-
-  if (profilActuel.photo_url) {
-    photo = `
+  const photo = profilActuel.photo_url
+    ? `
       <img
         src="${echapperHtml(profilActuel.photo_url)}"
         alt="Photo membre"
@@ -247,8 +263,8 @@ function card() {
           margin-bottom:15px;
         "
       >
-    `;
-  }
+    `
+    : '';
 
   content.innerHTML = `
     <div class="card">
@@ -281,10 +297,7 @@ function card() {
         ${echapperHtml(nomRole(profilActuel.role_id))}
       </p>
 
-      <p>
-        <b>Statut :</b>
-        ACTIF
-      </p>
+      <p><b>Statut :</b> ACTIF</p>
     </div>
   `;
 }
@@ -314,28 +327,18 @@ function dues() {
         ${echapperHtml(profilActuel.numero_membre || '-')}
       </p>
 
-      <p>
-        Cotisation mensuelle :
-        <b>500 FCFA</b>
-      </p>
+      <p>Cotisation mensuelle : <b>500 FCFA</b></p>
 
       <p>
         Après deux semaines de retard :
         <b>700 FCFA</b>
-      </p>
-
-      <p>
-        Le suivi automatique des paiements
-        sera connecté à la base de données
-        dans l'étape suivante.
       </p>
     </div>
   `;
 }
 
 /* =========================
-   GESTION DES MEMBRES
-   PRÉSIDENT UNIQUEMENT
+   MEMBRES
 ========================= */
 
 async function members() {
@@ -348,9 +351,11 @@ async function members() {
   content.innerHTML = `
     <div class="card">
       <h2>Membres ACVTC-CI</h2>
-      <p>Chargement de la liste des membres...</p>
+      <p>Chargement...</p>
     </div>
   `;
+
+  await chargerReferentiels();
 
   const { data: membres, error } =
     await supabaseClient
@@ -362,98 +367,575 @@ async function members() {
       .order('prenoms', { ascending: true });
 
   if (error) {
-    console.error('Erreur membres :', error);
+    console.error(error);
 
     content.innerHTML = `
       <div class="card">
         <h2>Membres ACVTC-CI</h2>
-
         <p style="color:#b91c1c;">
           Impossible de charger la liste des membres.
         </p>
-
-        <p>
-          Vérifiez que la politique Supabase
-          « Président lit tous les profils »
-          a bien été installée.
-        </p>
       </div>
     `;
     return;
   }
 
-  if (!membres || membres.length === 0) {
-    content.innerHTML = `
-      <div class="card">
-        <h2>Membres ACVTC-CI</h2>
-        <p>Aucun membre enregistré.</p>
-      </div>
-    `;
-    return;
-  }
+  const liste = Array.isArray(membres) ? membres : [];
 
-  const lignes = membres.map((membre) => {
-    const actif = membre.actif !== false;
+  const lignes = liste.map((membre) => `
+    <div
+      style="
+        border:1px solid #d8dee9;
+        border-radius:12px;
+        padding:14px;
+        margin:12px 0;
+        background:#ffffff;
+      "
+    >
+      <h3 style="margin:0 0 8px 0;">
+        ${echapperHtml(membre.prenoms || '')}
+        ${echapperHtml(membre.nom || '')}
+      </h3>
 
-    return `
-      <div
-        style="
-          border:1px solid #d8dee9;
-          border-radius:12px;
-          padding:14px;
-          margin:12px 0;
-          background:#ffffff;
-        "
-      >
-        <h3 style="margin:0 0 8px 0;">
-          ${echapperHtml(membre.prenoms || '')}
-          ${echapperHtml(membre.nom || '')}
-        </h3>
+      <p style="margin:5px 0;">
+        <b>N° membre :</b>
+        ${echapperHtml(membre.numero_membre || '-')}
+      </p>
 
-        <p style="margin:5px 0;">
-          <b>N° membre :</b>
-          ${echapperHtml(membre.numero_membre || '-')}
-        </p>
+      <p style="margin:5px 0;">
+        <b>Téléphone :</b>
+        ${echapperHtml(membre.telephone || '-')}
+      </p>
 
-        <p style="margin:5px 0;">
-          <b>Téléphone :</b>
-          ${echapperHtml(membre.telephone || '-')}
-        </p>
+      <p style="margin:5px 0;">
+        <b>Section :</b>
+        ${echapperHtml(nomSection(membre.section_id))}
+      </p>
 
-        <p style="margin:5px 0;">
-          <b>Section :</b>
-          ${echapperHtml(nomSection(membre.section_id))}
-        </p>
+      <p style="margin:5px 0;">
+        <b>Rôle :</b>
+        ${echapperHtml(nomRole(membre.role_id))}
+      </p>
 
-        <p style="margin:5px 0;">
-          <b>Rôle :</b>
-          ${echapperHtml(nomRole(membre.role_id))}
-        </p>
-
-        <p style="margin:5px 0;">
-          <b>Statut :</b>
-          ${actif ? 'Actif' : 'Désactivé'}
-        </p>
-      </div>
-    `;
-  }).join('');
+      <p style="margin:5px 0;">
+        <b>Statut :</b>
+        ${membre.actif === false ? 'Désactivé' : 'Actif'}
+      </p>
+    </div>
+  `).join('');
 
   content.innerHTML = `
     <div class="card">
       <h2>Membres ACVTC-CI</h2>
 
-      <p>
-        <b>Total :</b> ${membres.length}
-      </p>
+      <button
+        onclick="afficherFormulaireInvitation()"
+        style="margin-bottom:16px;"
+      >
+        + Ajouter un membre
+      </button>
 
-      ${lignes}
+      <p><b>Total :</b> ${liste.length}</p>
+
+      ${lignes || '<p>Aucun membre enregistré.</p>'}
     </div>
   `;
 }
 
 /* =========================
+   FORMULAIRE INVITATION
+========================= */
+
+async function afficherFormulaireInvitation() {
+  if (!profilActuel || Number(profilActuel.role_id) !== 1) return;
+
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Ajouter un membre</h2>
+      <p>Chargement des sections et des rôles...</p>
+    </div>
+  `;
+
+  const { data: sections, error: erreurSections } =
+    await supabaseClient.rpc('list_sections');
+
+  const { data: roles, error: erreurRoles } =
+    await supabaseClient.rpc('list_roles');
+
+  if (erreurSections || erreurRoles) {
+    console.error(erreurSections || erreurRoles);
+
+    content.innerHTML = `
+      <div class="card">
+        <h2>Ajouter un membre</h2>
+        <p style="color:#b91c1c;">
+          Impossible de charger les sections ou les rôles.
+        </p>
+        <button onclick="members()">Retour</button>
+      </div>
+    `;
+    return;
+  }
+
+  (sections || []).forEach((s) => {
+    sectionsCache[Number(s.id)] = s.nom;
+  });
+
+  (roles || []).forEach((r) => {
+    rolesCache[Number(r.id)] = r.nom;
+  });
+
+  const optionsSections = (sections || [])
+    .map(
+      (s) =>
+        `<option value="${Number(s.id)}">${echapperHtml(s.nom)}</option>`
+    )
+    .join('');
+
+  const optionsRoles = (roles || [])
+    .map(
+      (r) =>
+        `<option value="${Number(r.id)}">${echapperHtml(r.nom)}</option>`
+    )
+    .join('');
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Ajouter un membre</h2>
+
+      <p>
+        Le lien d'invitation sera valable pendant 7 jours.
+      </p>
+
+      <label><b>Adresse e-mail</b></label>
+      <input
+        id="invite-email"
+        type="email"
+        placeholder="exemple@gmail.com"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          margin:8px 0 14px;
+        "
+      >
+
+      <label><b>Téléphone</b></label>
+      <input
+        id="invite-telephone"
+        type="tel"
+        placeholder="07xxxxxxxx"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          margin:8px 0 14px;
+        "
+      >
+
+      <label><b>Section</b></label>
+      <select
+        id="invite-section"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          margin:8px 0 14px;
+          padding:12px;
+        "
+      >
+        ${optionsSections}
+      </select>
+
+      <label><b>Rôle</b></label>
+      <select
+        id="invite-role"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          margin:8px 0 14px;
+          padding:12px;
+        "
+      >
+        ${optionsRoles}
+      </select>
+
+      <button onclick="creerInvitation()">
+        Générer le lien d'invitation
+      </button>
+
+      <button
+        onclick="members()"
+        style="margin-left:8px;"
+      >
+        Annuler
+      </button>
+
+      <div
+        id="invite-result"
+        style="margin-top:18px;"
+      ></div>
+    </div>
+  `;
+}
+
+/* =========================
+   CRÉER INVITATION
+========================= */
+
+async function creerInvitation() {
+  const email =
+    document.getElementById('invite-email')?.value.trim() || '';
+
+  const telephone =
+    document.getElementById('invite-telephone')?.value.trim() || '';
+
+  const sectionId =
+    Number(document.getElementById('invite-section')?.value);
+
+  const roleId =
+    Number(document.getElementById('invite-role')?.value);
+
+  const zone = document.getElementById('invite-result');
+
+  if (!zone) return;
+
+  if (!email || !sectionId || !roleId) {
+    zone.innerHTML = `
+      <p style="color:#b91c1c;">
+        Renseignez l'e-mail, la section et le rôle.
+      </p>
+    `;
+    return;
+  }
+
+  zone.innerHTML = '<p>Création de l’invitation...</p>';
+
+  const { data: token, error } =
+    await supabaseClient.rpc(
+      'create_invitation',
+      {
+        p_email: email,
+        p_telephone: telephone || null,
+        p_role_id: roleId,
+        p_section_id: sectionId
+      }
+    );
+
+  if (error || !token) {
+    console.error(error);
+
+    zone.innerHTML = `
+      <p style="color:#b91c1c;">
+        Impossible de créer l'invitation.
+      </p>
+    `;
+    return;
+  }
+
+  const lien =
+    `${window.location.origin}${window.location.pathname}` +
+    `?invite=${encodeURIComponent(token)}`;
+
+  zone.innerHTML = `
+    <p><b>Invitation créée ✅</b></p>
+
+    <p>Envoyez ce lien au membre :</p>
+
+    <input
+      id="invitation-link"
+      value="${echapperHtml(lien)}"
+      readonly
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 12px;
+      "
+    >
+
+    <button onclick="copierLienInvitation()">
+      Copier le lien
+    </button>
+  `;
+}
+
+async function copierLienInvitation() {
+  const champ = document.getElementById('invitation-link');
+  if (!champ) return;
+
+  try {
+    await navigator.clipboard.writeText(champ.value);
+    alert('Lien copié.');
+  } catch (e) {
+    champ.focus();
+    champ.select();
+    document.execCommand('copy');
+    alert('Lien copié.');
+  }
+}
+
+/* =========================
+   PAGE INSCRIPTION
+========================= */
+
+async function afficherInscriptionInvitation(token) {
+  const loginZone = document.getElementById('login');
+  const appZone = document.getElementById('app');
+  const boutonOut = document.getElementById('out');
+
+  if (!loginZone) return;
+
+  if (appZone) appZone.classList.add('hide');
+  if (boutonOut) boutonOut.classList.add('hide');
+
+  loginZone.classList.remove('hide');
+
+  loginZone.innerHTML = `
+    <h2>Invitation ACVTC-CI</h2>
+    <p>Vérification de l'invitation...</p>
+  `;
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      'invitation_info',
+      { p_token: token }
+    );
+
+  if (
+    error ||
+    !Array.isArray(data) ||
+    data.length === 0
+  ) {
+    console.error(error);
+
+    loginZone.innerHTML = `
+      <h2>Invitation ACVTC-CI</h2>
+
+      <p style="color:#b91c1c;">
+        Ce lien est invalide, expiré ou déjà utilisé.
+      </p>
+
+      <button onclick="retourConnexion()">
+        Retour à la connexion
+      </button>
+    `;
+    return;
+  }
+
+  const invitation = data[0];
+
+  loginZone.innerHTML = `
+    <h2>Créer mon compte ACVTC-CI</h2>
+
+    <p>
+      <b>Section :</b>
+      ${echapperHtml(invitation.section_nom)}
+      <br>
+      <b>Rôle :</b>
+      ${echapperHtml(invitation.role_nom)}
+    </p>
+
+    <label><b>Nom</b></label>
+    <input
+      id="signup-nom"
+      type="text"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <label><b>Prénoms</b></label>
+    <input
+      id="signup-prenoms"
+      type="text"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <label><b>E-mail</b></label>
+    <input
+      id="signup-email"
+      type="email"
+      value="${echapperHtml(invitation.email)}"
+      readonly
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <label><b>Téléphone</b></label>
+    <input
+      id="signup-telephone"
+      type="tel"
+      value="${echapperHtml(invitation.telephone || '')}"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <label><b>Mot de passe</b></label>
+    <input
+      id="signup-password"
+      type="password"
+      minlength="6"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <label><b>Confirmer le mot de passe</b></label>
+    <input
+      id="signup-password2"
+      type="password"
+      minlength="6"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        margin:8px 0 14px;
+      "
+    >
+
+    <button
+      id="signup-button"
+      onclick="creerCompteInvitation()"
+    >
+      Créer mon compte
+    </button>
+
+    <button
+      onclick="retourConnexion()"
+      style="margin-left:8px;"
+    >
+      Annuler
+    </button>
+
+    <p id="signup-message"></p>
+  `;
+
+  loginZone.dataset.invitationToken = token;
+}
+
+/* =========================
+   CRÉER COMPTE INVITÉ
+========================= */
+
+async function creerCompteInvitation() {
+  const loginZone = document.getElementById('login');
+  const zone = document.getElementById('signup-message');
+
+  if (!loginZone || !zone) return;
+
+  const token = loginZone.dataset.invitationToken || '';
+
+  const nom =
+    document.getElementById('signup-nom')?.value.trim() || '';
+
+  const prenoms =
+    document.getElementById('signup-prenoms')?.value.trim() || '';
+
+  const email =
+    document.getElementById('signup-email')?.value.trim() || '';
+
+  const telephone =
+    document.getElementById('signup-telephone')?.value.trim() || '';
+
+  const password =
+    document.getElementById('signup-password')?.value || '';
+
+  const password2 =
+    document.getElementById('signup-password2')?.value || '';
+
+  if (!nom || !prenoms || !email || !password) {
+    zone.style.color = '#b91c1c';
+    zone.textContent =
+      'Veuillez compléter tous les champs obligatoires.';
+    return;
+  }
+
+  if (password.length < 6) {
+    zone.style.color = '#b91c1c';
+    zone.textContent =
+      'Le mot de passe doit contenir au moins 6 caractères.';
+    return;
+  }
+
+  if (password !== password2) {
+    zone.style.color = '#b91c1c';
+    zone.textContent =
+      'Les deux mots de passe sont différents.';
+    return;
+  }
+
+  zone.style.color = '#123b70';
+  zone.textContent = 'Création du compte en cours...';
+
+  const { data, error } =
+    await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo:
+          `${window.location.origin}${window.location.pathname}`,
+        data: {
+          invitation_token: token,
+          nom,
+          prenoms,
+          telephone
+        }
+      }
+    });
+
+  if (error) {
+    console.error(error);
+
+    zone.style.color = '#b91c1c';
+    zone.textContent =
+      `Inscription impossible : ${error.message}`;
+    return;
+  }
+
+  if (data?.session && data?.user) {
+    history.replaceState(
+      {},
+      '',
+      window.location.pathname
+    );
+
+    await chargerProfil(data.user);
+    return;
+  }
+
+  zone.style.color = '#123b70';
+
+  zone.innerHTML = `
+    Compte créé.
+    Vérifiez votre e-mail pour confirmer votre inscription,
+    puis revenez vous connecter.
+    <br><br>
+    <button onclick="retourConnexion()">
+      Aller à la connexion
+    </button>
+  `;
+}
+
+function retourConnexion() {
+  window.location.href =
+    `${window.location.origin}${window.location.pathname}`;
+}
+
+/* =========================
    FINANCES
-   PRÉSIDENT UNIQUEMENT
 ========================= */
 
 function finance() {
@@ -466,16 +948,12 @@ function finance() {
   content.innerHTML = `
     <div class="card">
       <h2>Finances ACVTC-CI</h2>
-
-      <p>
-        Tableau de gestion financière de l'association.
-      </p>
-
-      <p>• les cotisations</p>
-      <p>• les paiements</p>
-      <p>• les retards</p>
-      <p>• les recettes</p>
-      <p>• les synthèses financières</p>
+      <p>Tableau de gestion financière de l'association.</p>
+      <p>• Cotisations</p>
+      <p>• Paiements</p>
+      <p>• Retards</p>
+      <p>• Recettes</p>
+      <p>• Synthèses financières</p>
     </div>
   `;
 }
@@ -488,21 +966,15 @@ async function logout() {
   await supabaseClient.auth.signOut();
 
   profilActuel = null;
+
   sessionStorage.removeItem('acvtc_profil');
 
-  const appZone = document.getElementById('app');
-  const loginZone = document.getElementById('login');
-  const boutonDeconnexion = document.getElementById('out');
-
-  if (appZone) appZone.classList.add('hide');
-  if (boutonDeconnexion) boutonDeconnexion.classList.add('hide');
-  if (loginZone) loginZone.classList.remove('hide');
-
-  messageConnexion('');
+  window.location.href =
+    `${window.location.origin}${window.location.pathname}`;
 }
 
 /* =========================
-   VÉRIFICATION SESSION
+   SESSION
 ========================= */
 
 async function verifierSession() {
@@ -510,7 +982,7 @@ async function verifierSession() {
     data: { session }
   } = await supabaseClient.auth.getSession();
 
-  if (session && session.user) {
+  if (session?.user) {
     await chargerProfil(session.user);
     return;
   }
@@ -520,7 +992,22 @@ async function verifierSession() {
 }
 
 /* =========================
-   LANCEMENT
+   DÉMARRAGE
 ========================= */
 
-verifierSession();
+async function demarrerApplication() {
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const tokenInvitation =
+    params.get('invite');
+
+  if (tokenInvitation) {
+    await afficherInscriptionInvitation(tokenInvitation);
+    return;
+  }
+
+  await verifierSession();
+}
+
+demarrerApplication();
