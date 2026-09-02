@@ -8,6 +8,23 @@ const supabaseClient = window.supabase.createClient(
 
 let profilActuel = null;
 
+function nomSection(sectionId) {
+  const sections = {
+    1: 'Abidjan',
+    2: 'Bouaké',
+    3: 'Yamoussoukro'
+  };
+
+  return sections[Number(sectionId)] || `Section ${sectionId || '-'}`;
+}
+
+function nomRole(roleId) {
+  const roles = {
+    1: 'Président'
+  };
+
+  return roles[Number(roleId)] || `Rôle ${roleId || '-'}`;
+}
 
 /* =========================
    MESSAGE DE CONNEXION
@@ -21,7 +38,6 @@ function messageConnexion(message, erreur = false) {
   zone.textContent = message;
   zone.style.color = erreur ? '#b91c1c' : '#123b70';
 }
-
 
 /* =========================
    CONNEXION
@@ -42,7 +58,6 @@ async function login() {
       'Veuillez saisir votre adresse e-mail et votre mot de passe.',
       true
     );
-
     return;
   }
 
@@ -50,8 +65,8 @@ async function login() {
 
   const { data, error } =
     await supabaseClient.auth.signInWithPassword({
-      email: email,
-      password: password
+      email,
+      password
     });
 
   if (error) {
@@ -61,22 +76,16 @@ async function login() {
       'Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.',
       true
     );
-
     return;
   }
 
   if (!data || !data.user) {
-    messageConnexion(
-      'Utilisateur introuvable.',
-      true
-    );
-
+    messageConnexion('Utilisateur introuvable.', true);
     return;
   }
 
   await chargerProfil(data.user);
 }
-
 
 /* =========================
    CHARGEMENT DU PROFIL
@@ -103,7 +112,6 @@ async function chargerProfil(user) {
     );
 
     await supabaseClient.auth.signOut();
-
     return;
   }
 
@@ -114,7 +122,6 @@ async function chargerProfil(user) {
     );
 
     await supabaseClient.auth.signOut();
-
     return;
   }
 
@@ -128,35 +135,20 @@ async function chargerProfil(user) {
   afficherApplication(profil);
 }
 
-
 /* =========================
    AFFICHAGE APPLICATION
 ========================= */
 
 function afficherApplication(profil) {
-  const loginZone =
-    document.getElementById('login');
+  const loginZone = document.getElementById('login');
+  const appZone = document.getElementById('app');
+  const boutonDeconnexion = document.getElementById('out');
 
-  const appZone =
-    document.getElementById('app');
-
-  const boutonDeconnexion =
-    document.getElementById('out');
-
-  if (loginZone) {
-    loginZone.classList.add('hide');
-  }
-
-  if (appZone) {
-    appZone.classList.remove('hide');
-  }
-
-  if (boutonDeconnexion) {
-    boutonDeconnexion.classList.remove('hide');
-  }
+  if (loginZone) loginZone.classList.add('hide');
+  if (appZone) appZone.classList.remove('hide');
+  if (boutonDeconnexion) boutonDeconnexion.classList.remove('hide');
 
   const nav = document.getElementById('nav');
-
   if (!nav) return;
 
   let boutons = `
@@ -173,10 +165,8 @@ function afficherApplication(profil) {
   }
 
   nav.innerHTML = boutons;
-
   home();
 }
-
 
 /* =========================
    ACCUEIL
@@ -185,18 +175,13 @@ function afficherApplication(profil) {
 function home() {
   if (!profilActuel) return;
 
-  const content =
-    document.getElementById('content');
-
+  const content = document.getElementById('content');
   if (!content) return;
 
   content.innerHTML = `
     <div class="card">
-
       <h2>
-        Bienvenue
-        ${profilActuel.prenoms || ''}
-        ${profilActuel.nom || ''}
+        Bienvenue ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
       </h2>
 
       <p>
@@ -211,23 +196,21 @@ function home() {
 
       <p>
         <b>Section :</b>
-        ${profilActuel.section_id || '-'}
+        ${nomSection(profilActuel.section_id)}
       </p>
 
       <p>
         <b>Rôle :</b>
-        ${profilActuel.role_id || '-'}
+        ${nomRole(profilActuel.role_id)}
       </p>
 
       <p>
         <b>Statut :</b>
         Compte actif
       </p>
-
     </div>
   `;
 }
-
 
 /* =========================
    CARTE DE MEMBRE
@@ -236,9 +219,7 @@ function home() {
 function card() {
   if (!profilActuel) return;
 
-  const content =
-    document.getElementById('content');
-
+  const content = document.getElementById('content');
   if (!content) return;
 
   let photo = '';
@@ -261,14 +242,12 @@ function card() {
 
   content.innerHTML = `
     <div class="card">
-
       <h2>Carte membre ACVTC-CI</h2>
 
       ${photo}
 
       <h3>
-        ${profilActuel.prenoms || ''}
-        ${profilActuel.nom || ''}
+        ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
       </h3>
 
       <p>
@@ -283,18 +262,21 @@ function card() {
 
       <p>
         <b>Section :</b>
-        ${profilActuel.section_id || '-'}
+        ${nomSection(profilActuel.section_id)}
+      </p>
+
+      <p>
+        <b>Rôle :</b>
+        ${nomRole(profilActuel.role_id)}
       </p>
 
       <p>
         <b>Statut :</b>
         ACTIF
       </p>
-
     </div>
   `;
 }
-
 
 /* =========================
    COTISATIONS
@@ -303,20 +285,16 @@ function card() {
 function dues() {
   if (!profilActuel) return;
 
-  const content =
-    document.getElementById('content');
-
+  const content = document.getElementById('content');
   if (!content) return;
 
   content.innerHTML = `
     <div class="card">
-
       <h2>Cotisations ACVTC-CI</h2>
 
       <p>
         <b>Membre :</b>
-        ${profilActuel.prenoms || ''}
-        ${profilActuel.nom || ''}
+        ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
       </p>
 
       <p>
@@ -339,11 +317,9 @@ function dues() {
         sera connecté à la base de données
         dans l'étape suivante.
       </p>
-
     </div>
   `;
 }
-
 
 /* =========================
    GESTION DES MEMBRES
@@ -352,43 +328,32 @@ function dues() {
 
 async function members() {
   if (!profilActuel) return;
+  if (Number(profilActuel.role_id) !== 1) return;
 
-  if (Number(profilActuel.role_id) !== 1) {
-    return;
-  }
-
-  const content =
-    document.getElementById('content');
-
+  const content = document.getElementById('content');
   if (!content) return;
 
   content.innerHTML = `
     <div class="card">
-
       <h2>Gestion des membres</h2>
 
       <p>
-        Espace réservé à l'administration
-        ACVTC-CI.
+        Espace réservé à l'administration ACVTC-CI.
       </p>
 
       <p>
-        Les membres d'Abidjan,
-        Bouaké et Yamoussoukro
+        Les membres d'Abidjan, Bouaké et Yamoussoukro
         seront gérés depuis cet espace.
       </p>
 
       <p>
-        Le module complet de création,
-        modification et activation
-        des membres sera connecté
+        Le module complet de création, modification
+        et activation des membres sera connecté
         à l'étape suivante.
       </p>
-
     </div>
   `;
 }
-
 
 /* =========================
    FINANCES
@@ -397,28 +362,17 @@ async function members() {
 
 function finance() {
   if (!profilActuel) return;
+  if (Number(profilActuel.role_id) !== 1) return;
 
-  if (Number(profilActuel.role_id) !== 1) {
-    return;
-  }
-
-  const content =
-    document.getElementById('content');
-
+  const content = document.getElementById('content');
   if (!content) return;
 
   content.innerHTML = `
     <div class="card">
-
       <h2>Finances ACVTC-CI</h2>
 
       <p>
-        Tableau de gestion financière
-        de l'association.
-      </p>
-
-      <p>
-        Ce module permettra de suivre :
+        Tableau de gestion financière de l'association.
       </p>
 
       <p>• les cotisations</p>
@@ -426,11 +380,9 @@ function finance() {
       <p>• les retards</p>
       <p>• les recettes</p>
       <p>• les synthèses financières</p>
-
     </div>
   `;
 }
-
 
 /* =========================
    DÉCONNEXION
@@ -440,35 +392,18 @@ async function logout() {
   await supabaseClient.auth.signOut();
 
   profilActuel = null;
+  sessionStorage.removeItem('acvtc_profil');
 
-  sessionStorage.removeItem(
-    'acvtc_profil'
-  );
+  const appZone = document.getElementById('app');
+  const loginZone = document.getElementById('login');
+  const boutonDeconnexion = document.getElementById('out');
 
-  const appZone =
-    document.getElementById('app');
-
-  const loginZone =
-    document.getElementById('login');
-
-  const boutonDeconnexion =
-    document.getElementById('out');
-
-  if (appZone) {
-    appZone.classList.add('hide');
-  }
-
-  if (boutonDeconnexion) {
-    boutonDeconnexion.classList.add('hide');
-  }
-
-  if (loginZone) {
-    loginZone.classList.remove('hide');
-  }
+  if (appZone) appZone.classList.add('hide');
+  if (boutonDeconnexion) boutonDeconnexion.classList.add('hide');
+  if (loginZone) loginZone.classList.remove('hide');
 
   messageConnexion('');
 }
-
 
 /* =========================
    VÉRIFICATION SESSION
@@ -477,8 +412,7 @@ async function logout() {
 async function verifierSession() {
   const {
     data: { session }
-  } =
-    await supabaseClient.auth.getSession();
+  } = await supabaseClient.auth.getSession();
 
   if (session && session.user) {
     await chargerProfil(session.user);
@@ -486,12 +420,8 @@ async function verifierSession() {
   }
 
   profilActuel = null;
-
-  sessionStorage.removeItem(
-    'acvtc_profil'
-  );
+  sessionStorage.removeItem('acvtc_profil');
 }
-
 
 /* =========================
    LANCEMENT
