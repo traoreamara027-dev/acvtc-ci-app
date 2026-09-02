@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co/';
+const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HeE36KA4qTxB3jfo98Uvtg_mQSvG350';
 
 const supabaseClient = window.supabase.createClient(
@@ -8,23 +8,41 @@ const supabaseClient = window.supabase.createClient(
 
 let profilActuel = null;
 
+
+/* =========================
+   MESSAGE DE CONNEXION
+========================= */
+
 function messageConnexion(message, erreur = false) {
   const zone = document.getElementById('login-message');
+
   if (!zone) return;
 
   zone.textContent = message;
   zone.style.color = erreur ? '#b91c1c' : '#123b70';
 }
 
+
+/* =========================
+   CONNEXION
+========================= */
+
 async function login() {
-  const email = document.getElementById('user').value.trim();
-  const password = document.getElementById('pass').value;
+  const email = document
+    .getElementById('user')
+    .value
+    .trim();
+
+  const password = document
+    .getElementById('pass')
+    .value;
 
   if (!email || !password) {
     messageConnexion(
       'Veuillez saisir votre adresse e-mail et votre mot de passe.',
       true
     );
+
     return;
   }
 
@@ -37,31 +55,55 @@ async function login() {
     });
 
   if (error) {
+    console.error('Erreur connexion :', error);
+
     messageConnexion(
-      'Connexion impossible. Vérifiez votre e-mail et votre mot de passe.',
+      'Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.',
       true
     );
+
+    return;
+  }
+
+  if (!data || !data.user) {
+    messageConnexion(
+      'Utilisateur introuvable.',
+      true
+    );
+
     return;
   }
 
   await chargerProfil(data.user);
 }
 
+
+/* =========================
+   CHARGEMENT DU PROFIL
+========================= */
+
 async function chargerProfil(user) {
-  const { data: profil, error } = await supabaseClient
-    .from('profils')
-    .select(
-      'identifiant, nom, prénoms, téléphone, section_id, rôle_id, numéro_membre, actif'
-    )
-    .eq('identifiant', user.id)
-    .single();
+  const { data: profil, error } =
+    await supabaseClient
+      .from('profiles')
+      .select(
+        'id, nom, prenoms, telephone, photo_url, section_id, role_id, numero_membre, actif'
+      )
+      .eq('id', user.id)
+      .single();
+
+  if (error) {
+    console.error('Erreur profil :', error);
+  }
 
   if (error || !profil) {
     messageConnexion(
       'Compte connecté, mais le profil ACVTC-CI est introuvable.',
       true
     );
+
     await supabaseClient.auth.signOut();
+
     return;
   }
 
@@ -70,7 +112,9 @@ async function chargerProfil(user) {
       'Ce compte ACVTC-CI est désactivé.',
       true
     );
+
     await supabaseClient.auth.signOut();
+
     return;
   }
 
@@ -84,12 +128,36 @@ async function chargerProfil(user) {
   afficherApplication(profil);
 }
 
+
+/* =========================
+   AFFICHAGE APPLICATION
+========================= */
+
 function afficherApplication(profil) {
-  document.getElementById('login').classList.add('hide');
-  document.getElementById('app').classList.remove('hide');
-  document.getElementById('out').classList.remove('hide');
+  const loginZone =
+    document.getElementById('login');
+
+  const appZone =
+    document.getElementById('app');
+
+  const boutonDeconnexion =
+    document.getElementById('out');
+
+  if (loginZone) {
+    loginZone.classList.add('hide');
+  }
+
+  if (appZone) {
+    appZone.classList.remove('hide');
+  }
+
+  if (boutonDeconnexion) {
+    boutonDeconnexion.classList.remove('hide');
+  }
 
   const nav = document.getElementById('nav');
+
+  if (!nav) return;
 
   let boutons = `
     <button onclick="home()">Accueil</button>
@@ -97,7 +165,12 @@ function afficherApplication(profil) {
     <button onclick="dues()">Cotisations</button>
   `;
 
-  if (Number(profil['rôle_id']) === 1) {
+  /*
+    role_id = 1
+    correspond au Président / Administrateur principal.
+  */
+
+  if (Number(profil.role_id) === 1) {
     boutons += `
       <button onclick="members()">Membres</button>
       <button onclick="finance()">Finances</button>
@@ -109,112 +182,344 @@ function afficherApplication(profil) {
   home();
 }
 
+
+/* =========================
+   ACCUEIL
+========================= */
+
 function home() {
   if (!profilActuel) return;
 
-  document.getElementById('content').innerHTML = `
+  const content =
+    document.getElementById('content');
+
+  if (!content) return;
+
+  content.innerHTML = `
     <div class="card">
-      <h2>Bienvenue ${profilActuel['prénoms'] || ''} ${profilActuel['nom'] || ''}</h2>
 
-      <p><b>Numéro membre :</b>
-      ${profilActuel['numéro_membre'] || '-'}</p>
+      <h2>
+        Bienvenue
+        ${profilActuel.prenoms || ''}
+        ${profilActuel.nom || ''}
+      </h2>
 
-      <p><b>Section :</b>
-      ${profilActuel['section_id'] || '-'}</p>
+      <p>
+        <b>Numéro membre :</b>
+        ${profilActuel.numero_membre || '-'}
+      </p>
 
-      <p><b>Rôle :</b>
-      ${profilActuel['rôle_id'] || '-'}</p>
+      <p>
+        <b>Téléphone :</b>
+        ${profilActuel.telephone || '-'}
+      </p>
 
-      <p><b>Statut :</b>
-      Compte actif</p>
+      <p>
+        <b>Section :</b>
+        ${profilActuel.section_id || '-'}
+      </p>
+
+      <p>
+        <b>Rôle :</b>
+        ${profilActuel.role_id || '-'}
+      </p>
+
+      <p>
+        <b>Statut :</b>
+        Compte actif
+      </p>
+
     </div>
   `;
 }
+
+
+/* =========================
+   CARTE DE MEMBRE
+========================= */
 
 function card() {
   if (!profilActuel) return;
 
-  document.getElementById('content').innerHTML = `
+  const content =
+    document.getElementById('content');
+
+  if (!content) return;
+
+  let photo = '';
+
+  if (profilActuel.photo_url) {
+    photo = `
+      <img
+        src="${profilActuel.photo_url}"
+        alt="Photo membre"
+        style="
+          width:120px;
+          height:120px;
+          object-fit:cover;
+          border-radius:12px;
+          margin-bottom:15px;
+        "
+      >
+    `;
+  }
+
+  content.innerHTML = `
     <div class="card">
+
       <h2>Carte membre ACVTC-CI</h2>
 
+      ${photo}
+
       <h3>
-        ${profilActuel['prénoms'] || ''}
-        ${profilActuel['nom'] || ''}
+        ${profilActuel.prenoms || ''}
+        ${profilActuel.nom || ''}
       </h3>
 
       <p>
-        Numéro :
-        <b>${profilActuel['numéro_membre'] || '-'}</b>
+        <b>Numéro :</b>
+        ${profilActuel.numero_membre || '-'}
       </p>
 
       <p>
-        Section :
-        <b>${profilActuel['section_id'] || '-'}</b>
+        <b>Téléphone :</b>
+        ${profilActuel.telephone || '-'}
       </p>
+
+      <p>
+        <b>Section :</b>
+        ${profilActuel.section_id || '-'}
+      </p>
+
+      <p>
+        <b>Statut :</b>
+        ACTIF
+      </p>
+
     </div>
   `;
 }
+
+
+/* =========================
+   COTISATIONS
+========================= */
 
 function dues() {
-  document.getElementById('content').innerHTML = `
+  if (!profilActuel) return;
+
+  const content =
+    document.getElementById('content');
+
+  if (!content) return;
+
+  content.innerHTML = `
     <div class="card">
-      <h2>Cotisations</h2>
-      <p>Module de cotisations ACVTC-CI.</p>
+
+      <h2>Cotisations ACVTC-CI</h2>
+
+      <p>
+        <b>Membre :</b>
+        ${profilActuel.prenoms || ''}
+        ${profilActuel.nom || ''}
+      </p>
+
+      <p>
+        <b>Numéro membre :</b>
+        ${profilActuel.numero_membre || '-'}
+      </p>
+
+      <p>
+        Cotisation mensuelle :
+        <b>500 FCFA</b>
+      </p>
+
+      <p>
+        Après deux semaines de retard :
+        <b>700 FCFA</b>
+      </p>
+
+      <p>
+        Le suivi automatique des paiements
+        sera connecté à la base de données
+        dans l'étape suivante.
+      </p>
+
     </div>
   `;
 }
+
+
+/* =========================
+   GESTION DES MEMBRES
+   PRÉSIDENT UNIQUEMENT
+========================= */
 
 async function members() {
-  if (
-    !profilActuel ||
-    Number(profilActuel['rôle_id']) !== 1
-  ) {
+  if (!profilActuel) return;
+
+  if (Number(profilActuel.role_id) !== 1) {
     return;
   }
 
-  document.getElementById('content').innerHTML = `
+  const content =
+    document.getElementById('content');
+
+  if (!content) return;
+
+  content.innerHTML = `
     <div class="card">
+
       <h2>Gestion des membres</h2>
-      <p>Accès administration autorisé.</p>
+
+      <p>
+        Espace réservé à l'administration
+        ACVTC-CI.
+      </p>
+
+      <p>
+        Les membres d'Abidjan,
+        Bouaké et Yamoussoukro
+        seront gérés depuis cet espace.
+      </p>
+
+      <p>
+        Le module complet de création,
+        modification et activation
+        des membres sera connecté
+        à l'étape suivante.
+      </p>
+
     </div>
   `;
 }
+
+
+/* =========================
+   FINANCES
+   PRÉSIDENT UNIQUEMENT
+========================= */
 
 function finance() {
-  if (
-    !profilActuel ||
-    Number(profilActuel['rôle_id']) !== 1
-  ) {
+  if (!profilActuel) return;
+
+  if (Number(profilActuel.role_id) !== 1) {
     return;
   }
 
-  document.getElementById('content').innerHTML = `
+  const content =
+    document.getElementById('content');
+
+  if (!content) return;
+
+  content.innerHTML = `
     <div class="card">
-      <h2>Finances</h2>
-      <p>Module financier ACVTC-CI.</p>
+
+      <h2>Finances ACVTC-CI</h2>
+
+      <p>
+        Tableau de gestion financière
+        de l'association.
+      </p>
+
+      <p>
+        Ce module permettra de suivre :
+      </p>
+
+      <p>
+        • les cotisations
+      </p>
+
+      <p>
+        • les paiements
+      </p>
+
+      <p>
+        • les retards
+      </p>
+
+      <p>
+        • les recettes
+      </p>
+
+      <p>
+        • les synthèses financières
+      </p>
+
     </div>
   `;
 }
+
+
+/* =========================
+   DÉCONNEXION
+========================= */
 
 async function logout() {
   await supabaseClient.auth.signOut();
 
-  sessionStorage.removeItem('acvtc_profil');
+  profilActuel = null;
+
+  sessionStorage.removeItem(
+    'acvtc_profil'
+  );
+
+  const appZone =
+    document.getElementById('app');
+
+  const loginZone =
+    document.getElementById('login');
+
+  const boutonDeconnexion =
+    document.getElementById('out');
+
+  if (appZone) {
+    appZone.classList.add('hide');
+  }
+
+  if (boutonDeconnexion) {
+    boutonDeconnexion.classList.add('hide');
+  }
+
+  if (loginZone) {
+    loginZone.classList.remove('hide');
+  }
+
+  messageConnexion('');
+}
+
+
+/* =========================
+   VÉRIFICATION SESSION
+========================= */
+
+async function verifierSession() {
+  const {
+    data: { session }
+  } =
+    await supabaseClient.auth.getSession();
+
+  if (
+    session &&
+    session.user
+  ) {
+    await chargerProfil(
+      session.user
+    );
+
+    return;
+  }
 
   profilActuel = null;
 
-  location.reload();
+  sessionStorage.removeItem(
+    'acvtc_profil'
+  );
 }
 
-async function restaurerSession() {
-  const {
-    data: { session }
-  } = await supabaseClient.auth.getSession();
 
-  if (session && session.user) {
-    await chargerProfil(session.user);
-  }
-}
+/* =========================
+   LANCEMENT
+========================= */
 
-restaurerSession();
+verifierSession();
