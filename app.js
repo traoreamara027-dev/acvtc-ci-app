@@ -26,6 +26,15 @@ function nomRole(roleId) {
   return roles[Number(roleId)] || `Rôle ${roleId || '-'}`;
 }
 
+function echapperHtml(valeur) {
+  return String(valeur ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 /* =========================
    MESSAGE DE CONNEXION
 ========================= */
@@ -181,27 +190,28 @@ function home() {
   content.innerHTML = `
     <div class="card">
       <h2>
-        Bienvenue ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
+        Bienvenue ${echapperHtml(profilActuel.prenoms || '')}
+        ${echapperHtml(profilActuel.nom || '')}
       </h2>
 
       <p>
         <b>Numéro membre :</b>
-        ${profilActuel.numero_membre || '-'}
+        ${echapperHtml(profilActuel.numero_membre || '-')}
       </p>
 
       <p>
         <b>Téléphone :</b>
-        ${profilActuel.telephone || '-'}
+        ${echapperHtml(profilActuel.telephone || '-')}
       </p>
 
       <p>
         <b>Section :</b>
-        ${nomSection(profilActuel.section_id)}
+        ${echapperHtml(nomSection(profilActuel.section_id))}
       </p>
 
       <p>
         <b>Rôle :</b>
-        ${nomRole(profilActuel.role_id)}
+        ${echapperHtml(nomRole(profilActuel.role_id))}
       </p>
 
       <p>
@@ -227,7 +237,7 @@ function card() {
   if (profilActuel.photo_url) {
     photo = `
       <img
-        src="${profilActuel.photo_url}"
+        src="${echapperHtml(profilActuel.photo_url)}"
         alt="Photo membre"
         style="
           width:120px;
@@ -247,27 +257,28 @@ function card() {
       ${photo}
 
       <h3>
-        ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
+        ${echapperHtml(profilActuel.prenoms || '')}
+        ${echapperHtml(profilActuel.nom || '')}
       </h3>
 
       <p>
         <b>Numéro :</b>
-        ${profilActuel.numero_membre || '-'}
+        ${echapperHtml(profilActuel.numero_membre || '-')}
       </p>
 
       <p>
         <b>Téléphone :</b>
-        ${profilActuel.telephone || '-'}
+        ${echapperHtml(profilActuel.telephone || '-')}
       </p>
 
       <p>
         <b>Section :</b>
-        ${nomSection(profilActuel.section_id)}
+        ${echapperHtml(nomSection(profilActuel.section_id))}
       </p>
 
       <p>
         <b>Rôle :</b>
-        ${nomRole(profilActuel.role_id)}
+        ${echapperHtml(nomRole(profilActuel.role_id))}
       </p>
 
       <p>
@@ -294,12 +305,13 @@ function dues() {
 
       <p>
         <b>Membre :</b>
-        ${profilActuel.prenoms || ''} ${profilActuel.nom || ''}
+        ${echapperHtml(profilActuel.prenoms || '')}
+        ${echapperHtml(profilActuel.nom || '')}
       </p>
 
       <p>
         <b>Numéro membre :</b>
-        ${profilActuel.numero_membre || '-'}
+        ${echapperHtml(profilActuel.numero_membre || '-')}
       </p>
 
       <p>
@@ -335,22 +347,106 @@ async function members() {
 
   content.innerHTML = `
     <div class="card">
-      <h2>Gestion des membres</h2>
+      <h2>Membres ACVTC-CI</h2>
+      <p>Chargement de la liste des membres...</p>
+    </div>
+  `;
+
+  const { data: membres, error } =
+    await supabaseClient
+      .from('profiles')
+      .select(
+        'id, nom, prenoms, telephone, section_id, role_id, numero_membre, actif'
+      )
+      .order('nom', { ascending: true })
+      .order('prenoms', { ascending: true });
+
+  if (error) {
+    console.error('Erreur membres :', error);
+
+    content.innerHTML = `
+      <div class="card">
+        <h2>Membres ACVTC-CI</h2>
+
+        <p style="color:#b91c1c;">
+          Impossible de charger la liste des membres.
+        </p>
+
+        <p>
+          Vérifiez que la politique Supabase
+          « Président lit tous les profils »
+          a bien été installée.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!membres || membres.length === 0) {
+    content.innerHTML = `
+      <div class="card">
+        <h2>Membres ACVTC-CI</h2>
+        <p>Aucun membre enregistré.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const lignes = membres.map((membre) => {
+    const actif = membre.actif !== false;
+
+    return `
+      <div
+        style="
+          border:1px solid #d8dee9;
+          border-radius:12px;
+          padding:14px;
+          margin:12px 0;
+          background:#ffffff;
+        "
+      >
+        <h3 style="margin:0 0 8px 0;">
+          ${echapperHtml(membre.prenoms || '')}
+          ${echapperHtml(membre.nom || '')}
+        </h3>
+
+        <p style="margin:5px 0;">
+          <b>N° membre :</b>
+          ${echapperHtml(membre.numero_membre || '-')}
+        </p>
+
+        <p style="margin:5px 0;">
+          <b>Téléphone :</b>
+          ${echapperHtml(membre.telephone || '-')}
+        </p>
+
+        <p style="margin:5px 0;">
+          <b>Section :</b>
+          ${echapperHtml(nomSection(membre.section_id))}
+        </p>
+
+        <p style="margin:5px 0;">
+          <b>Rôle :</b>
+          ${echapperHtml(nomRole(membre.role_id))}
+        </p>
+
+        <p style="margin:5px 0;">
+          <b>Statut :</b>
+          ${actif ? 'Actif' : 'Désactivé'}
+        </p>
+      </div>
+    `;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Membres ACVTC-CI</h2>
 
       <p>
-        Espace réservé à l'administration ACVTC-CI.
+        <b>Total :</b> ${membres.length}
       </p>
 
-      <p>
-        Les membres d'Abidjan, Bouaké et Yamoussoukro
-        seront gérés depuis cet espace.
-      </p>
-
-      <p>
-        Le module complet de création, modification
-        et activation des membres sera connecté
-        à l'étape suivante.
-      </p>
+      ${lignes}
     </div>
   `;
 }
