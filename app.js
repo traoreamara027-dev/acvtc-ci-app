@@ -1,5 +1,4 @@
-const APP_URL = 'https://acvtc-ci-app.vercel.app';
-SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
+const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HeE36KA4qTxB3jfo98Uvtg_mQSvG350';
 
 const supabaseClient = window.supabase.createClient(
@@ -69,70 +68,7 @@ function messageConnexion(message, erreur = false) {
   zone.style.color = erreur ? '#b91c1c' : '#123b70';
 }
 
-/*/* =========================
-   RENVOI E-MAIL CONFIRMATION
-========================= */
-
-async function renvoyerConfirmation() {
-  const champEmail = document.getElementById('user');
-  const email = champEmail?.value.trim() || '';
-
-  if (!email) {
-    messageConnexion(
-      'Veuillez d’abord saisir votre adresse e-mail.',
-      true
-    );
-    return;
-  }
-
-  messageConnexion('Envoi du nouvel e-mail de confirmation...');
-
-  const { error } = await supabaseClient.auth.resend({
-    type: 'signup',
-    email,
-    options: {
-      emailRedirectTo: APP_URL
-    }
-  });
-
-  if (error) {
-    console.error(error);
-
-    messageConnexion(
-      `Impossible de renvoyer l’e-mail de confirmation : ${error.message}`,
-      true
-    );
-    return;
-  }
-
-  messageConnexion(
-    'Un nouvel e-mail de confirmation vient de vous être envoyé. Utilisez uniquement le dernier e-mail reçu.'
-  );
-}
-
-function installerBoutonConfirmation() {
-  const loginZone = document.getElementById('login');
-  const champEmail = document.getElementById('user');
-
-  if (!loginZone || !champEmail) return;
-  if (document.getElementById('resend-confirmation-button')) return;
-
-  const bouton = document.createElement('button');
-  bouton.id = 'resend-confirmation-button';
-  bouton.type = 'button';
-  bouton.textContent = 'Renvoyer l’e-mail de confirmation';
-  bouton.onclick = renvoyerConfirmation;
-  bouton.style.marginTop = '12px';
-  bouton.style.width = '100%';
-
-  const message = document.getElementById('login-message');
-
-  if (message?.parentNode) {
-    message.parentNode.insertBefore(bouton, message.nextSibling);
-  } else {
-    loginZone.appendChild(bouton);
-  }
-} =========================
+/* =========================
    CONNEXION
 ========================= */
 
@@ -1075,4 +1011,3 @@ async function demarrerApplication() {
 }
 
 demarrerApplication();
-setTimeout(installerBoutonConfirmation, 250);
