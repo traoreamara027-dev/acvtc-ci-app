@@ -72,6 +72,20 @@ function messageConnexion(message, erreur = false) {
    CONNEXION
 ========================= */
 
+async function renvoyerConfirmation() {
+  const email = document.getElementById('user').value.trim();
+
+  const { error } = await supabaseClient.auth.resend({
+    type: 'signup',
+    email: email
+  });
+
+  if (error) {
+    alert("Erreur : " + error.message);
+  } else {
+    alert("Un nouvel e-mail de confirmation a été envoyé.");
+  }
+}
 async function login() {
   const champEmail = document.getElementById('user');
   const champPass = document.getElementById('pass');
