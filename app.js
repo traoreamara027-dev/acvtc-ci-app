@@ -1,11 +1,24 @@
 const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HeE36KA4qTxB3jfo98Uvtg_mQSvG350';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
 let profilActuel = null;
-let sectionsCache = { 1: 'Abidjan', 2: 'Bouaké', 3: 'Yamoussoukro' };
-let rolesCache = { 1: 'Président' };
+let authUserId = null;
+let schemaMode = 'unknown';
+
+let sectionsCache = {
+  1: 'Abidjan',
+  2: 'Bouaké',
+  3: 'Yamoussoukro'
+};
+
+let rolesCache = {
+  1: 'Président'
+};
 
 function echapperHtml(v) {
   return String(v ?? '')
@@ -17,458 +30,4179 @@ function echapperHtml(v) {
 }
 
 function sansAccent(v) {
-  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return String(v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 function normaliserTelephone(v) {
   let s = String(v || '').replace(/[^0-9+]/g, '');
+
   if (!s) return '';
-  if (s.startsWith('+')) return s;
-  if (s.startsWith('225')) return `+${s}`;
-  if (s.startsWith('0')) return `+225${s.slice(1)}`;
+
+  if (s.startsWith('+225')) return s;
+
+  if (s.startsWith('225')) {
+    return `+${s}`;
+  }
+
+  if (s.startsWith('0') && s.length === 10) {
+    return `+225${s}`;
+  }
+
+  if (/^[0-9]{10}$/.test(s)) {
+    return `+225${s}`;
+  }
+
+  if (s.startsWith('+')) {
+    return s;
+  }
+
   return `+225${s}`;
 }
 
-function nomSection(id) { return sectionsCache[Number(id)] || `Section ${id || '-'}`; }
-function nomRole(id) { return rolesCache[Number(id)] || `Rôle ${id || '-'}`; }
+function nomSection(id) {
+  return sectionsCache[Number(id)] || `Section ${id || '-'}`;
+}
+
+function nomRole(id) {
+  return rolesCache[Number(id)] || `Rôle ${id || '-'}`;
+}
+
 function nomComplet(p = profilActuel) {
   if (!p) return '';
-  return p.nom_complet || [p.prenoms, p.nom].filter(Boolean).join(' ') || 'Membre ACVTC-CI';
+
+  return (
+    p.nom_complet ||
+    [p.prenoms, p.nom].filter(Boolean).join(' ') ||
+    'Membre ACVTC-CI'
+  );
 }
 
 function droits() {
-  const role = sansAccent(nomRole(profilActuel?.role_id));
-  const president = role === 'president';
+  const role = sansAccent(
+    profilActuel?.role_nom ||
+    nomRole(profilActuel?.role_id)
+  );
+
+  const president =
+    profilActuel?.can_manage_admins === true ||
+    role === 'president';
+
   const membre = role === 'membre';
-  const admin = !!profilActuel && !membre;
-  const secretariat = president || role.includes('secretaire');
-  const finance = president || role.includes('tresor');
-  return { role, president, membre, admin, secretariat, finance };
+
+  const admin =
+    profilActuel?.is_admin === true ||
+    (!!profilActuel && !membre);
+
+  const secretariat =
+    profilActuel?.can_manage_minutes === true ||
+    president ||
+    role.includes('secretaire');
+
+  const finance =
+    profilActuel?.can_manage_finances === true ||
+    president ||
+    role.includes('tresor');
+
+  const messages =
+    profilActuel?.can_manage_messages === true ||
+    president ||
+    role.includes('secretaire') ||
+    role.includes('communication');
+
+  const news =
+    profilActuel?.can_manage_news === true ||
+    president ||
+    role.includes('secretaire') ||
+    role.includes('communication');
+
+  return {
+    role,
+    president,
+    membre,
+    admin,
+    secretariat,
+    finance,
+    messages,
+    news
+  };
 }
 
 function toast(message, duree = 3200) {
   const el = document.getElementById('toast');
+
   if (!el) return;
+
   el.textContent = message;
   el.classList.remove('hide');
+
   clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => el.classList.add('hide'), duree);
+
+  window.__toastTimer = setTimeout(() => {
+    el.classList.add('hide');
+  }, duree);
 }
 
 function setAuthMessage(message, erreur = false) {
   const el = document.getElementById('auth-message');
+
   if (!el) return;
+
   el.textContent = message;
   el.style.color = erreur ? '#b42318' : '#163F73';
 }
 
 async function chargerReferentiels() {
-  const [{ data: sections }, { data: roles }] = await Promise.all([
-    supabaseClient.rpc('list_sections'),
-    supabaseClient.rpc('list_roles')
-  ]);
-  (sections || []).forEach(s => sectionsCache[Number(s.id)] = s.nom);
-  (roles || []).forEach(r => rolesCache[Number(r.id)] = r.nom);
+  try {
+    const [
+      { data: sections, error: e1 },
+      { data: roles, error: e2 }
+    ] = await Promise.all([
+      supabaseClient.rpc('list_sections'),
+      supabaseClient.rpc('list_roles')
+    ]);
+
+    if (!e1) {
+      (sections || []).forEach(s => {
+        sectionsCache[Number(s.id)] = s.nom;
+      });
+    }
+
+    if (!e2) {
+      (roles || []).forEach(r => {
+        rolesCache[Number(r.id)] = r.nom;
+      });
+    }
+
+  } catch (e) {
+    console.warn(
+      'Référentiels RPC indisponibles',
+      e
+    );
+  }
 }
 
 async function envoyerCode() {
-  const phone = normaliserTelephone(document.getElementById('phone')?.value);
-  if (!phone || phone.length < 12) {
-    setAuthMessage('Saisissez un numéro de téléphone valide.', true);
+  const phone = normaliserTelephone(
+    document.getElementById('phone')?.value
+  );
+
+  if (!phone || phone.length < 13) {
+    setAuthMessage(
+      'Saisissez un numéro ivoirien valide.',
+      true
+    );
     return;
   }
-  setAuthMessage('Envoi du code en cours...');
-  const { error } = await supabaseClient.auth.signInWithOtp({
-    phone,
-    options: { shouldCreateUser: true }
-  });
+
+  setAuthMessage(
+    'Envoi du code en cours...'
+  );
+
+  const { error } =
+    await supabaseClient.auth.signInWithOtp({
+      phone,
+      options: {
+        shouldCreateUser: true
+      }
+    });
+
   if (error) {
     console.error(error);
-    setAuthMessage("Impossible d'envoyer le SMS. Vérifiez que l'authentification par téléphone est activée dans Supabase.", true);
+
+    setAuthMessage(
+      "Impossible d'envoyer le SMS. L'accès téléphone doit être activé dans Supabase.",
+      true
+    );
+
     return;
   }
-  document.getElementById('otp-zone')?.classList.remove('hide');
-  setAuthMessage('Code envoyé par SMS. Saisissez-le ci-dessous.');
+
+  document
+    .getElementById('otp-zone')
+    ?.classList.remove('hide');
+
+  setAuthMessage(
+    'Code envoyé par SMS. Saisissez-le ci-dessous.'
+  );
 }
 
 async function verifierCode() {
-  const phone = normaliserTelephone(document.getElementById('phone')?.value);
-  const token = String(document.getElementById('otp')?.value || '').trim();
+  const phone = normaliserTelephone(
+    document.getElementById('phone')?.value
+  );
+
+  const token = String(
+    document.getElementById('otp')?.value || ''
+  ).trim();
+
   if (!phone || token.length < 6) {
-    setAuthMessage('Saisissez votre numéro et le code à 6 chiffres.', true);
+    setAuthMessage(
+      'Saisissez le numéro et le code reçu.',
+      true
+    );
     return;
   }
-  setAuthMessage('Vérification en cours...');
-  const { data, error } = await supabaseClient.auth.verifyOtp({ phone, token, type: 'sms' });
+
+  setAuthMessage(
+    'Vérification en cours...'
+  );
+
+  const { data, error } =
+    await supabaseClient.auth.verifyOtp({
+      phone,
+      token,
+      type: 'sms'
+    });
+
   if (error || !data?.user) {
     console.error(error);
-    setAuthMessage('Code incorrect ou expiré.', true);
+
+    setAuthMessage(
+      'Code incorrect ou expiré.',
+      true
+    );
+
     return;
   }
+
   await chargerProfil(data.user);
 }
 
 async function legacyLogin() {
-  const email = document.getElementById('legacy-email')?.value.trim();
-  const password = document.getElementById('legacy-pass')?.value || '';
+  const email =
+    document
+      .getElementById('legacy-email')
+      ?.value
+      .trim();
+
+  const password =
+    document
+      .getElementById('legacy-pass')
+      ?.value || '';
+
   if (!email || !password) {
-    setAuthMessage("Saisissez l'e-mail et le mot de passe de l'ancien compte.", true);
+    setAuthMessage(
+      "Saisissez l'e-mail et le mot de passe de votre ancien compte.",
+      true
+    );
     return;
   }
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  setAuthMessage(
+    'Connexion en cours...'
+  );
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
   if (error || !data?.user) {
     console.error(error);
-    setAuthMessage('Connexion impossible.', true);
+
+    setAuthMessage(
+      'Connexion impossible. Vérifiez votre e-mail et votre mot de passe.',
+      true
+    );
+
     return;
   }
-  await chargerProfil(data.user);
+
+  await chargerProfil(
+    data.user,
+    true
+  );
 }
 
-async function chargerProfil(user) {
+async function essayerProfilV5(user) {
+  try {
+    await supabaseClient.rpc(
+      'claim_my_v5_account'
+    );
+  } catch (e) {
+    console.warn(
+      'claim_my_v5_account non disponible ou non applicable',
+      e
+    );
+  }
+
+  try {
+    const { data, error } =
+      await supabaseClient.rpc(
+        'get_my_v5_profile'
+      );
+
+    if (error || !data) {
+      return null;
+    }
+
+    const row =
+      Array.isArray(data)
+        ? data[0]
+        : data;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...row,
+      role_nom: row.role_nom,
+      section_nom: row.section_nom
+    };
+
+  } catch (e) {
+    console.warn(
+      'Profil V5 indisponible',
+      e
+    );
+
+    return null;
+  }
+}
+
+async function essayerProfilLegacy(user) {
+  try {
+    await supabaseClient.rpc(
+      'claim_phone_profile'
+    );
+  } catch (e) {
+    console.warn(
+      'claim_phone_profile non disponible',
+      e
+    );
+  }
+
+  try {
+    const { data: profil, error } =
+      await supabaseClient
+        .from('profiles')
+        .select(
+          'id, nom, prenoms, nom_complet, telephone, phone_e164, photo_url, section_id, role_id, numero_membre, actif, verification_token'
+        )
+        .eq('id', user.id)
+        .single();
+
+    if (error || !profil) {
+      return null;
+    }
+
+    return profil;
+
+  } catch (e) {
+    console.warn(
+      'Profil ancien indisponible',
+      e
+    );
+
+    return null;
+  }
+}
+
+async function chargerProfil(
+  user,
+  legacyLoginUsed = false
+) {
+  authUserId = user.id;
+
   await chargerReferentiels();
-  try { await supabaseClient.rpc('claim_phone_profile'); } catch (e) { console.warn(e); }
 
-  const { data: profil, error } = await supabaseClient
-    .from('profiles')
-    .select('id, nom, prenoms, nom_complet, telephone, phone_e164, photo_url, section_id, role_id, numero_membre, actif, verification_token')
-    .eq('id', user.id)
-    .single();
+  let profil =
+    await essayerProfilV5(user);
 
-  if (error || !profil) {
-    console.error(error);
-    setAuthMessage("Votre téléphone est reconnu, mais aucun profil ACVTC-CI n'a encore été préparé par un administrateur.", true);
+  if (profil) {
+    schemaMode = 'v5';
+  } else {
+    profil =
+      await essayerProfilLegacy(user);
+
+    if (profil) {
+      schemaMode = 'legacy';
+    }
+  }
+
+  if (!profil) {
+    setAuthMessage(
+      legacyLoginUsed
+        ? "Compte connecté, mais aucun profil ACVTC-CI n'est lié à ce compte."
+        : "Votre numéro est reconnu par Supabase, mais aucun profil ACVTC-CI n'est encore lié à ce numéro.",
+      true
+    );
+
     await supabaseClient.auth.signOut();
+
     return;
   }
+
   if (profil.actif === false) {
-    setAuthMessage('Ce compte ACVTC-CI est désactivé.', true);
+    setAuthMessage(
+      'Ce compte ACVTC-CI est désactivé.',
+      true
+    );
+
     await supabaseClient.auth.signOut();
+
     return;
   }
+
   profilActuel = profil;
+
   afficherApplication();
 }
 
 function afficherApplication() {
-  document.getElementById('auth-screen')?.classList.add('hide');
-  document.getElementById('verify-screen')?.classList.add('hide');
-  document.getElementById('app-shell')?.classList.remove('hide');
-  const hu = document.getElementById('header-user');
-  if (hu) hu.innerHTML = `<b>${echapperHtml(nomComplet())}</b><span>${echapperHtml(nomRole(profilActuel.role_id))} · ${echapperHtml(nomSection(profilActuel.section_id))}</span>`;
+  document
+    .getElementById('auth-screen')
+    ?.classList.add('hide');
+
+  document
+    .getElementById('verify-screen')
+    ?.classList.add('hide');
+
+  document
+    .getElementById('app-shell')
+    ?.classList.remove('hide');
+
+  const hu =
+    document.getElementById(
+      'header-user'
+    );
+
+  if (hu) {
+    hu.innerHTML = `
+      <b>${echapperHtml(nomComplet())}</b>
+      <span>
+        ${echapperHtml(
+          profilActuel.role_nom ||
+          nomRole(profilActuel.role_id)
+        )}
+        ·
+        ${echapperHtml(
+          profilActuel.section_nom ||
+          nomSection(profilActuel.section_id)
+        )}
+      </span>
+    `;
+  }
+
   afficherNavigation();
+
   accueil();
+}function afficherNavigation() {
+  const d = droits();
+
+  const nav =
+    document.getElementById('nav');
+
+  if (!nav) return;
+
+  const items = [
+    ['accueil()', 'Accueil'],
+    ['maCarte()', 'Ma carte'],
+    ['cotisations()', 'Cotisations'],
+    ['actualites()', 'Actualités'],
+    ['messages()', 'Messages']
+  ];
+
+  if (d.admin) {
+    items.push([
+      'membres()',
+      'Membres'
+    ]);
+  }
+
+  if (d.secretariat) {
+    items.push([
+      'procesVerbaux()',
+      'PV'
+    ]);
+  }
+
+  if (d.finance) {
+    items.push([
+      'finances()',
+      'Finances'
+    ]);
+  }
+
+  nav.innerHTML =
+    items
+      .map(
+        ([fn, label]) =>
+          `<button onclick="${fn}">${label}</button>`
+      )
+      .join('');
 }
 
-function afficherNavigation() {
-  const d = droits();
-  const nav = document.getElementById('nav');
-  if (!nav) return;
-  const items = [
-    ['accueil()', 'Accueil'], ['maCarte()', 'Ma carte'], ['cotisations()', 'Cotisations'],
-    ['actualites()', 'Actualités'], ['messages()', 'Messages']
-  ];
-  if (d.admin) items.push(['membres()', 'Membres']);
-  if (d.secretariat) items.push(['procesVerbaux()', 'PV']);
-  if (d.finance) items.push(['finances()', 'Finances']);
-  nav.innerHTML = items.map(([fn, label]) => `<button onclick="${fn}">${label}</button>`).join('');
-}
 
 async function accueil() {
-  const content = document.getElementById('content');
+  const content =
+    document.getElementById(
+      'content'
+    );
+
   const d = droits();
+
   content.innerHTML = `
     <div class="card hero">
-      <h2>Bienvenue, ${echapperHtml(nomComplet())}</h2>
-      <p>${echapperHtml(nomRole(profilActuel.role_id))} · ${echapperHtml(nomSection(profilActuel.section_id))}</p>
-      <span class="badge badge-green">● Compte actif</span>
+
+      <h2>
+        Bienvenue,
+        ${echapperHtml(
+          nomComplet()
+        )}
+      </h2>
+
+      <p>
+        ${echapperHtml(
+          profilActuel.role_nom ||
+          nomRole(
+            profilActuel.role_id
+          )
+        )}
+        ·
+        ${echapperHtml(
+          profilActuel.section_nom ||
+          nomSection(
+            profilActuel.section_id
+          )
+        )}
+      </p>
+
+      <span class="badge badge-green">
+        ● Compte actif
+      </span>
+
     </div>
-    <div class="section-title"><h2>Mon espace</h2></div>
+
+
+    <div class="section-title">
+      <h2>Mon espace</h2>
+    </div>
+
+
     <div class="grid dashboard-grid">
-      <button class="quick navy" onclick="messages()"><span class="icon">📢</span><b>Messages aux conducteurs</b><small>Réunions, convocations et informations.</small></button>
-      <button class="quick red" onclick="actualites()"><span class="icon">🌍</span><b>Actualités VTC</b><small>Côte d'Ivoire et monde.</small></button>
-      <button class="quick" onclick="maCarte()"><span class="icon">🪪</span><b>Ma carte</b><small>Photo et QR de vérification.</small></button>
-      <button class="quick" onclick="cotisations()"><span class="icon">💳</span><b>Cotisations</b><small>500 FCFA / 700 FCFA après retard.</small></button>
-      ${d.admin ? `<button class="quick" onclick="membres()"><span class="icon">👥</span><b>Membres</b><small>Ajouter et consulter les membres.</small></button>` : ''}
-      ${d.secretariat ? `<button class="quick" onclick="procesVerbaux()"><span class="icon">📁</span><b>Secrétariat / PV</b><small>Archivage des procès-verbaux.</small></button>` : ''}
-      ${d.finance ? `<button class="quick" onclick="finances()"><span class="icon">📊</span><b>Finances</b><small>Suivi financier de l'association.</small></button>` : ''}
+
+      <button
+        class="quick navy"
+        onclick="messages()"
+      >
+        <span class="icon">
+          📢
+        </span>
+
+        <b>
+          Messages aux conducteurs
+        </b>
+
+        <small>
+          Réunions, convocations
+          et informations.
+        </small>
+      </button>
+
+
+      <button
+        class="quick red"
+        onclick="actualites()"
+      >
+        <span class="icon">
+          🌍
+        </span>
+
+        <b>
+          Actualités VTC
+        </b>
+
+        <small>
+          Côte d'Ivoire et monde.
+        </small>
+      </button>
+
+
+      <button
+        class="quick"
+        onclick="maCarte()"
+      >
+        <span class="icon">
+          🪪
+        </span>
+
+        <b>
+          Ma carte
+        </b>
+
+        <small>
+          Photo et QR
+          de vérification.
+        </small>
+      </button>
+
+
+      <button
+        class="quick"
+        onclick="cotisations()"
+      >
+        <span class="icon">
+          💳
+        </span>
+
+        <b>
+          Cotisations
+        </b>
+
+        <small>
+          500 FCFA /
+          700 FCFA après retard.
+        </small>
+      </button>
+
+
+      ${
+        d.admin
+        ?
+        `
+        <button
+          class="quick"
+          onclick="membres()"
+        >
+          <span class="icon">
+            👥
+          </span>
+
+          <b>
+            Membres
+          </b>
+
+          <small>
+            Ajouter et consulter
+            les membres.
+          </small>
+        </button>
+        `
+        :
+        ''
+      }
+
+
+      ${
+        d.secretariat
+        ?
+        `
+        <button
+          class="quick"
+          onclick="procesVerbaux()"
+        >
+          <span class="icon">
+            📁
+          </span>
+
+          <b>
+            Secrétariat / PV
+          </b>
+
+          <small>
+            Archivage des
+            procès-verbaux.
+          </small>
+        </button>
+        `
+        :
+        ''
+      }
+
+
+      ${
+        d.finance
+        ?
+        `
+        <button
+          class="quick"
+          onclick="finances()"
+        >
+          <span class="icon">
+            📊
+          </span>
+
+          <b>
+            Finances
+          </b>
+
+          <small>
+            Suivi financier
+            de l'association.
+          </small>
+        </button>
+        `
+        :
+        ''
+      }
+
     </div>
-    <div class="section-title"><h2>Informations importantes</h2></div>
-    <div id="home-messages" class="list"><div class="empty">Chargement...</div></div>
-    <div class="section-title"><h2>Dernières actualités VTC</h2><button class="btn btn-light btn-small" onclick="actualites()">Voir tout</button></div>
-    <div id="home-news" class="list"><div class="empty">Chargement...</div></div>`;
-  await Promise.all([chargerMessagesAccueil(), chargerActualitesAccueil()]);
+
+
+    <div class="section-title">
+      <h2>
+        Informations importantes
+      </h2>
+    </div>
+
+    <div
+      id="home-messages"
+      class="list"
+    >
+      <div class="empty">
+        Chargement...
+      </div>
+    </div>
+
+
+    <div class="section-title">
+
+      <h2>
+        Dernières actualités VTC
+      </h2>
+
+      <button
+        class="btn btn-light btn-small"
+        onclick="actualites()"
+      >
+        Voir tout
+      </button>
+
+    </div>
+
+
+    <div
+      id="home-news"
+      class="list"
+    >
+      <div class="empty">
+        Chargement...
+      </div>
+    </div>
+  `;
+
+
+  await Promise.all([
+    chargerMessagesAccueil(),
+    chargerActualitesAccueil()
+  ]);
 }
+
 
 async function chargerMessagesAccueil() {
-  const zone = document.getElementById('home-messages');
+  const zone =
+    document.getElementById(
+      'home-messages'
+    );
+
   if (!zone) return;
-  let q = supabaseClient.from('messages').select('*').eq('publie', true).order('created_at', { ascending: false }).limit(4);
-  const { data, error } = await q;
-  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun message important pour le moment.</div>'; return; }
-  const filtered = data.filter(m => !m.section_id || Number(m.section_id) === Number(profilActuel.section_id));
-  zone.innerHTML = filtered.length ? filtered.map(m => messageHtml(m)).join('') : '<div class="empty">Aucun message pour votre section.</div>';
+
+
+  if (schemaMode === 'v5') {
+
+    const { data, error } =
+      await supabaseClient.rpc(
+        'list_messages_v5',
+        {
+          p_limit: 4
+        }
+      );
+
+
+    if (
+      error ||
+      !(data || []).length
+    ) {
+
+      zone.innerHTML =
+        '<div class="empty">Aucun message important pour le moment.</div>';
+
+      return;
+    }
+
+
+    zone.innerHTML =
+      data
+        .map(m => `
+          <article class="list-item">
+
+            <div>
+
+              <h4>
+                📢
+                ${echapperHtml(
+                  m.title
+                )}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  m.body
+                )}
+              </p>
+
+              <p>
+                ${
+                  m.section_nom
+                  ?
+                  echapperHtml(
+                    m.section_nom
+                  )
+                  :
+                  'Tous les conducteurs'
+                }
+              </p>
+
+            </div>
+
+          </article>
+        `)
+        .join('');
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('publie', true)
+      .order(
+        'created_at',
+        {
+          ascending: false
+        }
+      )
+      .limit(4);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun message important pour le moment.</div>';
+
+    return;
+  }
+
+
+  const filtered =
+    data.filter(
+      m =>
+        !m.section_id ||
+        Number(
+          m.section_id
+        ) ===
+        Number(
+          profilActuel.section_id
+        )
+    );
+
+
+  zone.innerHTML =
+    filtered.length
+    ?
+    filtered
+      .map(
+        m =>
+          messageHtml(m)
+      )
+      .join('')
+    :
+    '<div class="empty">Aucun message pour votre section.</div>';
 }
+
 
 async function chargerActualitesAccueil() {
-  const zone = document.getElementById('home-news');
+  const zone =
+    document.getElementById(
+      'home-news'
+    );
+
   if (!zone) return;
-  const { data, error } = await supabaseClient.from('vtc_news').select('*').eq('publie', true).order('published_at', { ascending: false }).limit(3);
-  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Les actualités seront publiées ici par le bureau.</div>'; return; }
-  zone.innerHTML = data.map(n => newsHtml(n)).join('');
+
+
+  if (schemaMode === 'v5') {
+
+    const { data, error } =
+      await supabaseClient
+        .from('news_v5')
+        .select('*')
+        .eq(
+          'published',
+          true
+        )
+        .order(
+          'published_at',
+          {
+            ascending: false
+          }
+        )
+        .limit(3);
+
+
+    if (
+      error ||
+      !(data || []).length
+    ) {
+
+      zone.innerHTML =
+        '<div class="empty">Les actualités seront publiées ici par le bureau.</div>';
+
+      return;
+    }
+
+
+    zone.innerHTML =
+      data
+        .map(n =>
+          newsHtmlV5(n)
+        )
+        .join('');
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from('vtc_news')
+      .select('*')
+      .eq(
+        'publie',
+        true
+      )
+      .order(
+        'published_at',
+        {
+          ascending: false
+        }
+      )
+      .limit(3);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Les actualités seront publiées ici par le bureau.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data
+      .map(
+        n =>
+          newsHtml(n)
+      )
+      .join('');
 }
+
 
 function messageHtml(m) {
-  return `<article class="list-item"><div><h4>${m.important ? '🔴 ' : '📢 '}${echapperHtml(m.titre)}</h4><p>${echapperHtml(m.contenu)}</p><p>${m.section_id ? echapperHtml(nomSection(m.section_id)) : 'Tous les conducteurs'}</p></div></article>`;
+  return `
+    <article class="list-item">
+
+      <div>
+
+        <h4>
+          ${
+            m.important
+            ?
+            '🔴 '
+            :
+            '📢 '
+          }
+
+          ${echapperHtml(
+            m.titre
+          )}
+        </h4>
+
+        <p>
+          ${echapperHtml(
+            m.contenu
+          )}
+        </p>
+
+        <p>
+          ${
+            m.section_id
+            ?
+            echapperHtml(
+              nomSection(
+                m.section_id
+              )
+            )
+            :
+            'Tous les conducteurs'
+          }
+        </p>
+
+      </div>
+
+    </article>
+  `;
 }
+
 
 function newsHtml(n) {
-  const lien = n.source_url ? `<a class="news-source" href="${echapperHtml(n.source_url)}" target="_blank" rel="noopener">Voir la source ↗</a>` : '';
-  return `<article class="list-item"><div><h4>🌍 ${echapperHtml(n.titre)}</h4><p><b>${echapperHtml(n.pays || 'International')}</b> · ${echapperHtml(n.categorie || 'Actualité VTC')}</p><p>${echapperHtml(n.resume || '')}</p>${lien}</div></article>`;
+  const lien =
+    n.source_url
+    ?
+    `
+      <a
+        class="news-source"
+        href="${echapperHtml(
+          n.source_url
+        )}"
+        target="_blank"
+        rel="noopener"
+      >
+        Voir la source ↗
+      </a>
+    `
+    :
+    '';
+
+
+  return `
+    <article class="list-item">
+
+      <div>
+
+        <h4>
+          🌍
+          ${echapperHtml(
+            n.titre
+          )}
+        </h4>
+
+        <p>
+          <b>
+            ${echapperHtml(
+              n.pays ||
+              'International'
+            )}
+          </b>
+          ·
+          ${echapperHtml(
+            n.categorie ||
+            'Actualité VTC'
+          )}
+        </p>
+
+        <p>
+          ${echapperHtml(
+            n.resume ||
+            ''
+          )}
+        </p>
+
+        ${lien}
+
+      </div>
+
+    </article>
+  `;
 }
 
-async function maCarte() {
-  const content = document.getElementById('content');
-  const photo = profilActuel.photo_url
-    ? `<img class="profile-photo" src="${echapperHtml(profilActuel.photo_url)}" alt="Photo du membre">`
-    : `<div class="photo-placeholder">👤</div>`;
-  const token = profilActuel.verification_token || '';
-  content.innerHTML = `
-    <div class="section-title"><h2>Ma carte de membre</h2></div>
-    <div id="member-card" class="member-card">
-      <div class="member-card-head"><img src="/logo-acvtc.png" alt="ACVTC-CI"><div><b>ASSOCIATION DES CHAUFFEURS DE VTC CÔTE D'IVOIRE</b><div class="note">On travaille aujourd'hui pour le bonheur de demain.</div></div></div>
-      <div class="member-card-body">
-        <div>${photo}<div id="qrcode" class="qrbox" style="margin-top:10px"></div></div>
-        <div><h2>${echapperHtml(nomComplet())}</h2><p><b>N° membre :</b> ${echapperHtml(profilActuel.numero_membre || 'En cours d’attribution')}</p><p><b>Section :</b> ${echapperHtml(nomSection(profilActuel.section_id))}</p><p><b>Statut :</b> <span class="badge badge-green">Actif</span></p><p><b>Rôle :</b> ${echapperHtml(nomRole(profilActuel.role_id))}</p><p class="note">Scannez le QR code pour vérifier l'authenticité de la carte.</p></div>
+
+function newsHtmlV5(n) {
+  const lien =
+    n.source_url
+    ?
+    `
+      <a
+        class="news-source"
+        href="${echapperHtml(
+          n.source_url
+        )}"
+        target="_blank"
+        rel="noopener"
+      >
+        Voir la source ↗
+      </a>
+    `
+    :
+    '';
+
+
+  return `
+    <article class="list-item">
+
+      <div>
+
+        <h4>
+          🌍
+          ${echapperHtml(
+            n.title
+          )}
+        </h4>
+
+        <p>
+          <b>
+            ${echapperHtml(
+              n.country ||
+              'International'
+            )}
+          </b>
+          ·
+          ${echapperHtml(
+            n.category ||
+            'Actualité VTC'
+          )}
+        </p>
+
+        <p>
+          ${echapperHtml(
+            n.summary ||
+            ''
+          )}
+        </p>
+
+        ${lien}
+
       </div>
-      <div class="member-card-foot"><b>ACVTC-CI</b><span>Plus qu'une association, une grande famille.</span></div>
+
+    </article>
+  `;
+}
+
+
+async function maCarte() {
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+
+  const photo =
+    profilActuel.photo_url
+    ?
+    `
+      <img
+        class="profile-photo"
+        src="${echapperHtml(
+          profilActuel.photo_url
+        )}"
+        alt="Photo du membre"
+      >
+    `
+    :
+    `
+      <div class="photo-placeholder">
+        👤
+      </div>
+    `;
+
+
+  const token =
+    profilActuel.verification_token ||
+    '';
+
+
+  content.innerHTML = `
+
+    <div class="section-title">
+      <h2>
+        Ma carte de membre
+      </h2>
     </div>
+
+
+    <div
+      id="member-card"
+      class="member-card"
+    >
+
+      <div class="member-card-head">
+
+        <img
+          src="/logo-acvtc.png"
+          alt="ACVTC-CI"
+        >
+
+        <div>
+
+          <b>
+            ASSOCIATION DES CONDUCTEURS
+            DE VÉHICULES DE TRANSPORT
+            AVEC CHAUFFEUR DE CÔTE D'IVOIRE
+          </b>
+
+          <div class="note">
+            On travaille aujourd'hui
+            pour le bonheur de demain.
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="member-card-body">
+
+        <div>
+
+          ${photo}
+
+          <div
+            id="qrcode"
+            class="qrbox"
+            style="margin-top:10px"
+          ></div>
+
+        </div>
+
+
+        <div>
+
+          <h2>
+            ${echapperHtml(
+              nomComplet()
+            )}
+          </h2>
+
+          <p>
+            <b>N° membre :</b>
+            ${echapperHtml(
+              profilActuel.numero_membre ||
+              'En cours d’attribution'
+            )}
+          </p>
+
+          <p>
+            <b>Section :</b>
+            ${echapperHtml(
+              profilActuel.section_nom ||
+              nomSection(
+                profilActuel.section_id
+              )
+            )}
+          </p>
+
+          <p>
+            <b>Statut :</b>
+
+            <span class="badge badge-green">
+              Actif
+            </span>
+          </p>
+
+          <p>
+            <b>Rôle :</b>
+            ${echapperHtml(
+              profilActuel.role_nom ||
+              nomRole(
+                profilActuel.role_id
+              )
+            )}
+          </p>
+
+          <p class="note">
+            Scannez le QR code
+            pour vérifier l'authenticité
+            de la carte.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="member-card-foot">
+
+        <b>
+          ACVTC-CI
+        </b>
+
+        <span>
+          Plus qu'une association,
+          une grande famille.
+        </span>
+
+      </div>
+
+    </div>
+
+
     <div class="card-actions">
-      <label class="btn btn-light" style="text-align:center">📷 Ajouter / modifier ma photo<input id="photo-input" class="hide" type="file" accept="image/*" onchange="televerserPhoto(this.files[0])"></label>
-      <button class="btn btn-secondary" onclick="telechargerCarte()">⬇ Télécharger ma carte</button>
-    </div>`;
-  if (token && window.QRCode) {
-    const url = `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(token)}`;
-    new QRCode(document.getElementById('qrcode'), { text: url, width: 112, height: 112, correctLevel: QRCode.CorrectLevel.H });
+
+      <label
+        class="btn btn-light"
+        style="text-align:center"
+      >
+
+        📷 Ajouter / modifier ma photo
+
+        <input
+          id="photo-input"
+          class="hide"
+          type="file"
+          accept="image/*"
+          onchange="televerserPhoto(this.files[0])"
+        >
+
+      </label>
+
+
+      <button
+        class="btn btn-secondary"
+        onclick="telechargerCarte()"
+      >
+        ⬇ Télécharger ma carte
+      </button>
+
+    </div>
+  `;
+
+
+  if (
+    token &&
+    window.QRCode
+  ) {
+
+    const url =
+      `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(token)}`;
+
+
+    new QRCode(
+      document.getElementById(
+        'qrcode'
+      ),
+      {
+        text: url,
+        width: 112,
+        height: 112,
+        correctLevel:
+          QRCode.CorrectLevel.H
+      }
+    );
   }
 }
 
+
 async function televerserPhoto(file) {
+
   if (!file) return;
-  if (!file.type.startsWith('image/')) { toast('Choisissez une image.'); return; }
-  if (file.size > 5 * 1024 * 1024) { toast('La photo doit faire moins de 5 Mo.'); return; }
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `${profilActuel.id}/profil-${Date.now()}.${ext}`;
-  toast('Envoi de la photo...');
-  const { error } = await supabaseClient.storage.from('member-photos').upload(path, file, { upsert: true });
-  if (error) { console.error(error); toast("Impossible d'envoyer la photo."); return; }
-  const { data } = supabaseClient.storage.from('member-photos').getPublicUrl(path);
-  const url = data.publicUrl;
-  const { error: e2 } = await supabaseClient.rpc('set_my_photo_url', { p_url: url });
-  if (e2) { console.error(e2); toast("Photo envoyée mais profil non mis à jour."); return; }
-  profilActuel.photo_url = url;
-  toast('Photo mise à jour.');
+
+
+  if (
+    !file.type.startsWith(
+      'image/'
+    )
+  ) {
+
+    toast(
+      'Choisissez une image.'
+    );
+
+    return;
+  }
+
+
+  if (
+    file.size >
+    5 * 1024 * 1024
+  ) {
+
+    toast(
+      'La photo doit faire moins de 5 Mo.'
+    );
+
+    return;
+  }
+
+
+  const ext =
+    (
+      file.name
+        .split('.')
+        .pop() ||
+      'jpg'
+    )
+    .toLowerCase();
+
+
+  const folderId =
+    authUserId ||
+    profilActuel.id;
+
+
+  const path =
+    `${folderId}/profil-${Date.now()}.${ext}`;
+
+
+  toast(
+    'Envoi de la photo...'
+  );
+
+
+  const { error } =
+    await supabaseClient
+      .storage
+      .from(
+        'member-photos'
+      )
+      .upload(
+        path,
+        file,
+        {
+          upsert: true
+        }
+      );
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      "Impossible d'envoyer la photo."
+    );
+
+    return;
+  }
+
+
+  const { data } =
+    supabaseClient
+      .storage
+      .from(
+        'member-photos'
+      )
+      .getPublicUrl(path);
+
+
+  const url =
+    data.publicUrl;
+
+
+  let e2 = null;
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const rep =
+      await supabaseClient.rpc(
+        'update_my_photo_v5',
+        {
+          p_photo_url: url
+        }
+      );
+
+    e2 = rep.error;
+
+  } else {
+
+    const rep =
+      await supabaseClient.rpc(
+        'set_my_photo_url',
+        {
+          p_url: url
+        }
+      );
+
+    e2 = rep.error;
+  }
+
+
+  if (e2) {
+
+    console.error(e2);
+
+    toast(
+      'Photo envoyée mais profil non mis à jour.'
+    );
+
+    return;
+  }
+
+
+  profilActuel.photo_url =
+    url;
+
+
+  toast(
+    'Photo mise à jour.'
+  );
+
+
   maCarte();
 }
 
+
 async function telechargerCarte() {
-  const el = document.getElementById('member-card');
-  if (!el || !window.html2canvas || !window.jspdf) return;
-  toast('Préparation de la carte...');
-  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [85.6, 54] });
-  pdf.addImage(img, 'PNG', 0, 0, 85.6, 54);
-  pdf.save(`Carte-${(profilActuel.numero_membre || 'ACVTC-CI').replaceAll('/', '-')}.pdf`);
+
+  const el =
+    document.getElementById(
+      'member-card'
+    );
+
+
+  if (
+    !el ||
+    !window.html2canvas ||
+    !window.jspdf
+  ) {
+
+    return;
+  }
+
+
+  toast(
+    'Préparation de la carte...'
+  );
+
+
+  const canvas =
+    await html2canvas(
+      el,
+      {
+        scale: 2,
+        backgroundColor:
+          '#ffffff',
+        useCORS: true
+      }
+    );
+
+
+  const img =
+    canvas.toDataURL(
+      'image/png'
+    );
+
+
+  const { jsPDF } =
+    window.jspdf;
+
+
+  const pdf =
+    new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [
+        85.6,
+        54
+      ]
+    });
+
+
+  pdf.addImage(
+    img,
+    'PNG',
+    0,
+    0,
+    85.6,
+    54
+  );
+
+
+  pdf.save(
+    `Carte-${(
+      profilActuel.numero_membre ||
+      'ACVTC-CI'
+    ).replaceAll(
+      '/',
+      '-'
+    )}.pdf`
+  );
+}async function cotisations() {
+  const content =
+    document.getElementById('content');
+
+  content.innerHTML = `
+    <div class="section-title">
+      <h2>Mes cotisations</h2>
+    </div>
+
+    <div class="grid">
+      <div class="kpi">
+        <small>Cotisation mensuelle</small>
+        <b>500 FCFA</b>
+      </div>
+
+      <div class="kpi">
+        <small>Après 2 semaines de retard</small>
+        <b>700 FCFA</b>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Moyens de paiement</h3>
+
+      <p>
+        <b>Wave</b> ou
+        <b>Orange Money</b>
+      </p>
+
+      <p class="note">
+        Après le paiement, la confirmation définitive
+        est effectuée uniquement par le Président
+        ou la Trésorerie.
+      </p>
+    </div>
+
+    <div
+      id="cotis-list"
+      class="list"
+      style="margin-top:14px"
+    >
+      <div class="empty">
+        Chargement...
+      </div>
+    </div>
+  `;
+
+  const zone =
+    document.getElementById(
+      'cotis-list'
+    );
+
+  if (schemaMode === 'v5') {
+
+    const { data, error } =
+      await supabaseClient
+        .from('contributions_v5')
+        .select('*')
+        .eq(
+          'member_id',
+          profilActuel.id
+        )
+        .order(
+          'period',
+          {
+            ascending: false
+          }
+        )
+        .limit(12);
+
+    if (
+      error ||
+      !(data || []).length
+    ) {
+      zone.innerHTML =
+        '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>';
+
+      return;
+    }
+
+    zone.innerHTML =
+      data.map(c => {
+
+        const total =
+          Number(c.amount || 0) +
+          Number(c.penalty || 0);
+
+        const statut =
+          sansAccent(
+            c.status || ''
+          );
+
+        let texteStatut =
+          '⏳ En attente';
+
+        if (
+          statut === 'paye' ||
+          statut === 'payee'
+        ) {
+          texteStatut =
+            '✅ Payée';
+        }
+
+        if (
+          statut === 'rejete' ||
+          statut === 'rejetee'
+        ) {
+          texteStatut =
+            '❌ Rejetée';
+        }
+
+        return `
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${
+                  new Date(
+                    c.period
+                  ).toLocaleDateString(
+                    'fr-FR',
+                    {
+                      month: 'long',
+                      year: 'numeric'
+                    }
+                  )
+                }
+              </h4>
+
+              <p>
+                ${texteStatut}
+                ·
+                ${total} FCFA
+              </p>
+
+              ${
+                c.payment_method
+                ?
+                `
+                  <p>
+                    Moyen :
+                    ${echapperHtml(
+                      c.payment_method
+                    )}
+                  </p>
+                `
+                :
+                ''
+              }
+
+            </div>
+
+          </div>
+        `;
+      }).join('');
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from('cotisations')
+      .select('*')
+      .eq(
+        'profile_id',
+        profilActuel.id
+      )
+      .order(
+        'mois',
+        {
+          ascending: false
+        }
+      )
+      .limit(12);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data.map(c => {
+
+      const paye =
+        sansAccent(
+          c.statut
+        ) === 'paye';
+
+      return `
+        <div class="list-item">
+
+          <div>
+
+            <h4>
+              ${
+                new Date(
+                  c.mois
+                ).toLocaleDateString(
+                  'fr-FR',
+                  {
+                    month: 'long',
+                    year: 'numeric'
+                  }
+                )
+              }
+            </h4>
+
+            <p>
+              ${
+                paye
+                ?
+                '✅ Payée'
+                :
+                '⏳ En attente'
+              }
+              ·
+              ${c.montant} FCFA
+            </p>
+
+          </div>
+
+        </div>
+      `;
+    }).join('');
 }
 
-async function cotisations() {
-  const content = document.getElementById('content');
-  content.innerHTML = `<div class="section-title"><h2>Mes cotisations</h2></div><div class="grid"><div class="kpi"><small>Cotisation mensuelle</small><b>500 FCFA</b></div><div class="kpi"><small>Après 2 semaines de retard</small><b>700 FCFA</b></div></div><div id="cotis-list" class="list" style="margin-top:14px"><div class="empty">Chargement...</div></div>`;
-  const { data, error } = await supabaseClient.from('cotisations').select('*').eq('profile_id', profilActuel.id).order('mois', { ascending: false }).limit(12);
-  const z = document.getElementById('cotis-list');
-  if (error || !(data || []).length) { z.innerHTML = '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>'; return; }
-  z.innerHTML = data.map(c => `<div class="list-item"><div><h4>${new Date(c.mois).toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</h4><p>${c.statut === 'paye' ? '✅ Payée' : '⏳ En attente'} · ${c.montant} FCFA</p></div></div>`).join('');
-}
 
 async function membres() {
-  const d = droits();
-  if (!d.admin) return;
+
+  const d =
+    droits();
+
+  if (!d.admin) {
+    return;
+  }
+
   await chargerReferentiels();
-  const content = document.getElementById('content');
-  const optionsSections = Object.entries(sectionsCache).map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('');
-  const optionsRoles = Object.entries(rolesCache).filter(([,n]) => sansAccent(n) !== 'membre').map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('');
+
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+
+  const optionsSections =
+    Object.entries(
+      sectionsCache
+    )
+    .map(
+      ([id, nom]) =>
+        `
+          <option value="${id}">
+            ${echapperHtml(nom)}
+          </option>
+        `
+    )
+    .join('');
+
+
+  let optionsRoles = '';
+
+
+  if (
+    schemaMode === 'v5' &&
+    d.president
+  ) {
+
+    const { data } =
+      await supabaseClient.rpc(
+        'list_admin_roles_v5'
+      );
+
+
+    optionsRoles =
+      (data || [])
+        .map(
+          r =>
+            `
+              <option value="${r.id}">
+                ${echapperHtml(
+                  r.nom
+                )}
+              </option>
+            `
+        )
+        .join('');
+
+  } else {
+
+    optionsRoles =
+      Object.entries(
+        rolesCache
+      )
+      .filter(
+        ([, nom]) => {
+
+          const r =
+            sansAccent(nom);
+
+          return (
+            r !== 'membre' &&
+            r !== 'president'
+          );
+        }
+      )
+      .map(
+        ([id, nom]) =>
+          `
+            <option value="${id}">
+              ${echapperHtml(nom)}
+            </option>
+          `
+      )
+      .join('');
+  }
+
+
   content.innerHTML = `
-    <div class="section-title"><h2>Gestion des membres</h2></div>
-    <div class="card"><h3>+ Ajouter un membre simple</h3><p class="note">Tous les administrateurs peuvent enregistrer un membre simple avec son nom complet, son téléphone et sa section.</p><div class="form-grid"><div><label>Nom complet</label><input id="m-nom" placeholder="Ex. Kouassi Jean Marc"></div><div><label>Téléphone</label><input id="m-phone" type="tel" placeholder="07 XX XX XX XX"></div><div><label>Section</label><select id="m-section">${optionsSections}</select></div><div style="display:flex;align-items:end"><button class="btn btn-primary" onclick="ajouterMembreSimple()">Enregistrer le membre</button></div></div></div>
-    ${d.president ? `<div class="card" style="margin-top:14px"><h3>Créer un administrateur</h3><p class="note">Réservé au Président. Le rôle est défini ici et ne peut pas être choisi par l'utilisateur lors de la connexion.</p><div class="form-grid"><div><label>Nom complet</label><input id="a-nom"></div><div><label>Téléphone</label><input id="a-phone" type="tel"></div><div><label>Section</label><select id="a-section">${optionsSections}</select></div><div><label>Rôle</label><select id="a-role">${optionsRoles}</select></div><div class="full"><button class="btn btn-secondary" onclick="ajouterAdministrateur()">Créer l'administrateur</button></div></div></div>` : ''}
-    <div class="section-title"><h3>Liste des membres</h3></div><div id="members-list" class="list"><div class="empty">Chargement...</div></div>`;
+
+    <div class="section-title">
+      <h2>
+        Gestion des membres
+      </h2>
+    </div>
+
+
+    <div class="card">
+
+      <h3>
+        + Ajouter un membre simple
+      </h3>
+
+      <p class="note">
+        Tous les administrateurs peuvent
+        enregistrer un membre simple.
+        Le rôle Membre est attribué automatiquement.
+      </p>
+
+
+      <div class="form-grid">
+
+        <div>
+
+          <label>
+            Nom complet
+          </label>
+
+          <input
+            id="m-nom"
+            placeholder="Ex. Kouassi Jean Marc"
+          >
+
+        </div>
+
+
+        <div>
+
+          <label>
+            Téléphone
+          </label>
+
+          <input
+            id="m-phone"
+            type="tel"
+            placeholder="07 XX XX XX XX"
+          >
+
+        </div>
+
+
+        <div>
+
+          <label>
+            Section
+          </label>
+
+          <select id="m-section">
+            ${optionsSections}
+          </select>
+
+        </div>
+
+
+        <div
+          style="
+            display:flex;
+            align-items:end
+          "
+        >
+
+          <button
+            class="btn btn-primary"
+            onclick="ajouterMembreSimple()"
+          >
+            Enregistrer le membre
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    ${
+      d.president
+      ?
+      `
+        <div
+          class="card"
+          style="margin-top:14px"
+        >
+
+          <h3>
+            Créer un administrateur
+          </h3>
+
+          <p class="note">
+            Cette fonction est réservée
+            au Président.
+          </p>
+
+
+          <div class="form-grid">
+
+            <div>
+
+              <label>
+                Nom complet
+              </label>
+
+              <input id="a-nom">
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Téléphone
+              </label>
+
+              <input
+                id="a-phone"
+                type="tel"
+              >
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Section
+              </label>
+
+              <select id="a-section">
+                ${optionsSections}
+              </select>
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Rôle
+              </label>
+
+              <select id="a-role">
+                ${optionsRoles}
+              </select>
+
+            </div>
+
+
+            <div class="full">
+
+              <button
+                class="btn btn-secondary"
+                onclick="ajouterAdministrateur()"
+              >
+                Créer l'administrateur
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      `
+      :
+      ''
+    }
+
+
+    <div class="section-title">
+      <h3>
+        Liste des membres
+      </h3>
+    </div>
+
+
+    <div
+      id="members-list"
+      class="list"
+    >
+
+      <div class="empty">
+        Chargement...
+      </div>
+
+    </div>
+  `;
+
+
   await chargerListeMembres();
 }
 
+
 async function ajouterMembreSimple() {
-  const nom = document.getElementById('m-nom')?.value.trim();
-  const phone = normaliserTelephone(document.getElementById('m-phone')?.value);
-  const section = Number(document.getElementById('m-section')?.value);
-  if (!nom || !phone || !section) { toast('Complétez le nom, le téléphone et la section.'); return; }
-  const { error } = await supabaseClient.rpc('admin_create_member', { p_nom_complet: nom, p_phone: phone, p_section_id: section });
-  if (error) { console.error(error); toast(error.message || 'Création impossible.'); return; }
-  toast('Membre enregistré. Il pourra se connecter avec son numéro de téléphone.');
-  document.getElementById('m-nom').value = '';
-  document.getElementById('m-phone').value = '';
-  chargerListeMembres();
+
+  const nom =
+    document
+      .getElementById(
+        'm-nom'
+      )
+      ?.value
+      .trim();
+
+
+  const phone =
+    normaliserTelephone(
+      document
+        .getElementById(
+          'm-phone'
+        )
+        ?.value
+    );
+
+
+  const section =
+    Number(
+      document
+        .getElementById(
+          'm-section'
+        )
+        ?.value
+    );
+
+
+  if (
+    !nom ||
+    !phone ||
+    !section
+  ) {
+
+    toast(
+      'Complétez le nom, le téléphone et la section.'
+    );
+
+    return;
+  }
+
+
+  const fonction =
+    schemaMode === 'v5'
+      ?
+      'admin_create_member_v5'
+      :
+      'admin_create_member';
+
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      fonction,
+      {
+        p_nom_complet: nom,
+        p_phone: phone,
+        p_section_id: section
+      }
+    );
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      error.message ||
+      'Création impossible.'
+    );
+
+    return;
+  }
+
+
+  toast(
+    data
+      ?
+      `Membre enregistré : ${data}`
+      :
+      'Membre enregistré.'
+  );
+
+
+  document
+    .getElementById(
+      'm-nom'
+    )
+    .value = '';
+
+
+  document
+    .getElementById(
+      'm-phone'
+    )
+    .value = '';
+
+
+  await chargerListeMembres();
 }
+
 
 async function ajouterAdministrateur() {
-  if (!droits().president) return;
-  const nom = document.getElementById('a-nom')?.value.trim();
-  const phone = normaliserTelephone(document.getElementById('a-phone')?.value);
-  const section = Number(document.getElementById('a-section')?.value);
-  const role = Number(document.getElementById('a-role')?.value);
-  if (!nom || !phone || !section || !role) { toast('Complétez tous les champs.'); return; }
-  const { error } = await supabaseClient.rpc('president_create_admin', { p_nom_complet: nom, p_phone: phone, p_section_id: section, p_role_id: role });
-  if (error) { console.error(error); toast(error.message || 'Création impossible.'); return; }
-  toast('Administrateur enregistré.');
+
+  if (
+    !droits().president
+  ) {
+    return;
+  }
+
+
+  const nom =
+    document
+      .getElementById(
+        'a-nom'
+      )
+      ?.value
+      .trim();
+
+
+  const phone =
+    normaliserTelephone(
+      document
+        .getElementById(
+          'a-phone'
+        )
+        ?.value
+    );
+
+
+  const section =
+    Number(
+      document
+        .getElementById(
+          'a-section'
+        )
+        ?.value
+    );
+
+
+  const role =
+    Number(
+      document
+        .getElementById(
+          'a-role'
+        )
+        ?.value
+    );
+
+
+  if (
+    !nom ||
+    !phone ||
+    !section ||
+    !role
+  ) {
+
+    toast(
+      'Complétez tous les champs.'
+    );
+
+    return;
+  }
+
+
+  const fonction =
+    schemaMode === 'v5'
+      ?
+      'president_create_admin_v5'
+      :
+      'president_create_admin';
+
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      fonction,
+      {
+        p_nom_complet: nom,
+        p_phone: phone,
+        p_section_id: section,
+        p_role_id: role
+      }
+    );
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      error.message ||
+      'Création impossible.'
+    );
+
+    return;
+  }
+
+
+  toast(
+    data
+      ?
+      `Administrateur enregistré : ${data}`
+      :
+      'Administrateur enregistré.'
+  );
+
+
+  await chargerListeMembres();
 }
+
 
 async function chargerListeMembres() {
-  const zone = document.getElementById('members-list');
-  if (!zone) return;
-  const { data, error } = await supabaseClient.rpc('admin_list_members');
-  if (error) { console.error(error); zone.innerHTML = '<div class="empty">Impossible de charger les membres.</div>'; return; }
-  zone.innerHTML = (data || []).length ? data.map(m => `<div class="list-item"><div><h4>${echapperHtml(m.nom_complet || [m.prenoms,m.nom].filter(Boolean).join(' '))}</h4><p>${echapperHtml(m.numero_membre || 'Numéro en attente')} · ${echapperHtml(nomSection(m.section_id))}</p><p>${echapperHtml(m.telephone || m.phone_e164 || '')} · ${echapperHtml(nomRole(m.role_id))}</p></div><span class="badge ${m.actif === false ? 'badge-red' : 'badge-green'}">${m.actif === false ? 'Désactivé' : 'Actif'}</span></div>`).join('') : '<div class="empty">Aucun membre.</div>';
-}
 
-async function messages() {
+  const zone =
+    document.getElementById(
+      'members-list'
+    );
+
+  if (!zone) {
+    return;
+  }
+
+
+  const fonction =
+    schemaMode === 'v5'
+      ?
+      'list_members_v5'
+      :
+      'admin_list_members';
+
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      fonction
+    );
+
+
+  if (error) {
+
+    console.error(error);
+
+    zone.innerHTML =
+      '<div class="empty">Impossible de charger les membres.</div>';
+
+    return;
+  }
+
+
+  if (!(data || []).length) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun membre enregistré.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data
+      .map(m => {
+
+        const nom =
+          m.nom_complet ||
+          [
+            m.prenoms,
+            m.nom
+          ]
+          .filter(Boolean)
+          .join(' ');
+
+
+        const section =
+          m.section_nom ||
+          nomSection(
+            m.section_id
+          );
+
+
+        const role =
+          m.role_nom ||
+          nomRole(
+            m.role_id
+          );
+
+
+        const telephone =
+          m.telephone ||
+          m.phone_e164 ||
+          '';
+
+
+        return `
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${echapperHtml(nom)}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  m.numero_membre ||
+                  'Numéro en attente'
+                )}
+                ·
+                ${echapperHtml(section)}
+              </p>
+
+              <p>
+                ${echapperHtml(telephone)}
+                ·
+                ${echapperHtml(role)}
+              </p>
+
+            </div>
+
+
+            <span
+              class="badge ${
+                m.actif === false
+                ?
+                'badge-red'
+                :
+                'badge-green'
+              }"
+            >
+
+              ${
+                m.actif === false
+                ?
+                'Désactivé'
+                :
+                'Actif'
+              }
+
+            </span>
+
+          </div>
+        `;
+      })
+      .join('');
+}async function messages() {
   const d = droits();
-  const content = document.getElementById('content');
-  const optionsSections = `<option value="">Tous les conducteurs</option>${Object.entries(sectionsCache).map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('')}`;
-  content.innerHTML = `<div class="section-title"><h2>Messages aux conducteurs</h2></div>${d.admin ? `<div class="card"><h3>Publier un message</h3><div class="form-grid"><div><label>Titre</label><input id="msg-title"></div><div><label>Destinataires</label><select id="msg-section">${optionsSections}</select></div><div class="full"><label>Message</label><textarea id="msg-body"></textarea></div><div><label><input id="msg-important" type="checkbox" style="width:auto"> Message important</label></div><div style="display:flex;align-items:end"><button class="btn btn-primary" onclick="publierMessage()">Publier</button></div></div></div>` : ''}<div class="section-title"><h3>Messages publiés</h3></div><div id="messages-list" class="list"><div class="empty">Chargement...</div></div>`;
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+  const optionsSections = `
+    <option value="">
+      Tous les conducteurs
+    </option>
+    ${
+      Object.entries(
+        sectionsCache
+      )
+      .map(
+        ([id, nom]) =>
+          `
+            <option value="${id}">
+              ${echapperHtml(nom)}
+            </option>
+          `
+      )
+      .join('')
+    }
+  `;
+
+
+  content.innerHTML = `
+
+    <div class="section-title">
+      <h2>
+        Messages aux conducteurs
+      </h2>
+    </div>
+
+
+    ${
+      d.messages
+      ?
+      `
+        <div class="card">
+
+          <h3>
+            Publier un message
+          </h3>
+
+
+          <div class="form-grid">
+
+            <div>
+
+              <label>
+                Titre
+              </label>
+
+              <input id="msg-title">
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Destinataires
+              </label>
+
+              <select id="msg-section">
+                ${optionsSections}
+              </select>
+
+            </div>
+
+
+            <div class="full">
+
+              <label>
+                Message
+              </label>
+
+              <textarea id="msg-body"></textarea>
+
+            </div>
+
+
+            <div class="full">
+
+              <button
+                class="btn btn-primary"
+                onclick="publierMessage()"
+              >
+                Publier
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      `
+      :
+      ''
+    }
+
+
+    <div class="section-title">
+      <h3>
+        Messages publiés
+      </h3>
+    </div>
+
+
+    <div
+      id="messages-list"
+      class="list"
+    >
+
+      <div class="empty">
+        Chargement...
+      </div>
+
+    </div>
+  `;
+
+
   await chargerMessages();
 }
 
+
 async function chargerMessages() {
-  const zone = document.getElementById('messages-list');
-  const { data, error } = await supabaseClient.from('messages').select('*').eq('publie', true).order('created_at', { ascending: false }).limit(30);
-  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun message publié.</div>'; return; }
-  const visible = data.filter(m => droits().admin || !m.section_id || Number(m.section_id) === Number(profilActuel.section_id));
-  zone.innerHTML = visible.map(messageHtml).join('');
+
+  const zone =
+    document.getElementById(
+      'messages-list'
+    );
+
+  if (!zone) {
+    return;
+  }
+
+
+  if (schemaMode === 'v5') {
+
+    const { data, error } =
+      await supabaseClient.rpc(
+        'list_messages_v5',
+        {
+          p_limit: 50
+        }
+      );
+
+
+    if (
+      error ||
+      !(data || []).length
+    ) {
+
+      zone.innerHTML =
+        '<div class="empty">Aucun message publié.</div>';
+
+      return;
+    }
+
+
+    zone.innerHTML =
+      data
+        .map(
+          m =>
+            `
+              <article class="list-item">
+
+                <div>
+
+                  <h4>
+                    📢
+                    ${echapperHtml(
+                      m.title
+                    )}
+                  </h4>
+
+                  <p>
+                    ${echapperHtml(
+                      m.body
+                    )}
+                  </p>
+
+                  <p>
+                    ${
+                      m.section_nom
+                      ?
+                      echapperHtml(
+                        m.section_nom
+                      )
+                      :
+                      'Tous les conducteurs'
+                    }
+                  </p>
+
+                </div>
+
+              </article>
+            `
+        )
+        .join('');
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq(
+        'publie',
+        true
+      )
+      .order(
+        'created_at',
+        {
+          ascending: false
+        }
+      )
+      .limit(50);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun message publié.</div>';
+
+    return;
+  }
+
+
+  const visible =
+    data.filter(
+      m =>
+        droits().admin ||
+        !m.section_id ||
+        Number(
+          m.section_id
+        ) ===
+        Number(
+          profilActuel.section_id
+        )
+    );
+
+
+  zone.innerHTML =
+    visible
+      .map(
+        m =>
+          messageHtml(m)
+      )
+      .join('');
 }
+
 
 async function publierMessage() {
-  if (!droits().admin) return;
-  const titre = document.getElementById('msg-title')?.value.trim();
-  const contenu = document.getElementById('msg-body')?.value.trim();
-  const section = document.getElementById('msg-section')?.value;
-  const important = !!document.getElementById('msg-important')?.checked;
-  if (!titre || !contenu) { toast('Ajoutez un titre et un message.'); return; }
-  const { error } = await supabaseClient.from('messages').insert({ titre, contenu, section_id: section ? Number(section) : null, important, publie: true, created_by: profilActuel.id });
-  if (error) { console.error(error); toast('Publication impossible.'); return; }
-  toast('Message publié.');
-  messages();
+
+  if (
+    !droits().messages
+  ) {
+    return;
+  }
+
+
+  const titre =
+    document
+      .getElementById(
+        'msg-title'
+      )
+      ?.value
+      .trim();
+
+
+  const contenu =
+    document
+      .getElementById(
+        'msg-body'
+      )
+      ?.value
+      .trim();
+
+
+  const section =
+    document
+      .getElementById(
+        'msg-section'
+      )
+      ?.value;
+
+
+  if (
+    !titre ||
+    !contenu
+  ) {
+
+    toast(
+      'Ajoutez un titre et un message.'
+    );
+
+    return;
+  }
+
+
+  let error = null;
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const rep =
+      await supabaseClient
+        .from('messages_v5')
+        .insert({
+          title: titre,
+          body: contenu,
+          section_id:
+            section
+            ?
+            Number(section)
+            :
+            null
+        });
+
+    error = rep.error;
+
+  } else {
+
+    const rep =
+      await supabaseClient
+        .from('messages')
+        .insert({
+          titre,
+          contenu,
+          section_id:
+            section
+            ?
+            Number(section)
+            :
+            null,
+          important: false,
+          publie: true,
+          created_by:
+            profilActuel.id
+        });
+
+    error = rep.error;
+  }
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      'Publication impossible.'
+    );
+
+    return;
+  }
+
+
+  toast(
+    'Message publié.'
+  );
+
+
+  await messages();
 }
 
+
 async function actualites() {
-  const d = droits();
-  const content = document.getElementById('content');
-  content.innerHTML = `<div class="section-title"><h2>Actualités VTC – Côte d'Ivoire & Monde</h2></div>${d.admin ? `<div class="card"><h3>Publier une actualité</h3><div class="form-grid"><div><label>Titre</label><input id="news-title"></div><div><label>Pays</label><input id="news-country" placeholder="Côte d'Ivoire, France, Sénégal..."></div><div><label>Catégorie</label><input id="news-cat" placeholder="Réglementation, sécurité, innovation..."></div><div><label>Lien source</label><input id="news-url" type="url" placeholder="https://..."></div><div class="full"><label>Résumé</label><textarea id="news-summary"></textarea></div><div class="full"><button class="btn btn-primary" onclick="publierActualite()">Publier l'actualité</button></div></div></div>` : ''}<div class="section-title"><h3>Fil d'actualités</h3></div><div id="news-list" class="list"><div class="empty">Chargement...</div></div>`;
+
+  const d =
+    droits();
+
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+
+  content.innerHTML = `
+
+    <div class="section-title">
+      <h2>
+        Actualités VTC
+      </h2>
+    </div>
+
+
+    ${
+      d.news
+      ?
+      `
+        <div class="card">
+
+          <h3>
+            Publier une actualité
+          </h3>
+
+
+          <div class="form-grid">
+
+            <div>
+
+              <label>
+                Titre
+              </label>
+
+              <input id="news-title">
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Pays
+              </label>
+
+              <input
+                id="news-country"
+                placeholder="Côte d'Ivoire"
+              >
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Catégorie
+              </label>
+
+              <input
+                id="news-cat"
+                placeholder="Réglementation, sécurité..."
+              >
+
+            </div>
+
+
+            <div>
+
+              <label>
+                Lien source
+              </label>
+
+              <input
+                id="news-url"
+                type="url"
+                placeholder="https://..."
+              >
+
+            </div>
+
+
+            <div class="full">
+
+              <label>
+                Résumé
+              </label>
+
+              <textarea
+                id="news-summary"
+              ></textarea>
+
+            </div>
+
+
+            <div class="full">
+
+              <button
+                class="btn btn-primary"
+                onclick="publierActualite()"
+              >
+                Publier l'actualité
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      `
+      :
+      ''
+    }
+
+
+    <div class="section-title">
+      <h3>
+        Fil d'actualités
+      </h3>
+    </div>
+
+
+    <div
+      id="news-list"
+      class="list"
+    >
+
+      <div class="empty">
+        Chargement...
+      </div>
+
+    </div>
+  `;
+
+
   await chargerActualites();
 }
 
+
 async function chargerActualites() {
-  const zone = document.getElementById('news-list');
-  const { data, error } = await supabaseClient.from('vtc_news').select('*').eq('publie', true).order('published_at', { ascending: false }).limit(50);
-  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucune actualité publiée pour le moment.</div>'; return; }
-  zone.innerHTML = data.map(newsHtml).join('');
+
+  const zone =
+    document.getElementById(
+      'news-list'
+    );
+
+  if (!zone) {
+    return;
+  }
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const { data, error } =
+      await supabaseClient
+        .from('news_v5')
+        .select('*')
+        .eq(
+          'published',
+          true
+        )
+        .order(
+          'published_at',
+          {
+            ascending: false
+          }
+        )
+        .limit(50);
+
+
+    if (
+      error ||
+      !(data || []).length
+    ) {
+
+      zone.innerHTML =
+        '<div class="empty">Aucune actualité publiée pour le moment.</div>';
+
+      return;
+    }
+
+
+    zone.innerHTML =
+      data
+        .map(
+          n =>
+            newsHtmlV5(n)
+        )
+        .join('');
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from('vtc_news')
+      .select('*')
+      .eq(
+        'publie',
+        true
+      )
+      .order(
+        'published_at',
+        {
+          ascending: false
+        }
+      )
+      .limit(50);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucune actualité publiée pour le moment.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data
+      .map(
+        n =>
+          newsHtml(n)
+      )
+      .join('');
 }
+
 
 async function publierActualite() {
-  if (!droits().admin) return;
-  const titre = document.getElementById('news-title')?.value.trim();
-  const pays = document.getElementById('news-country')?.value.trim();
-  const categorie = document.getElementById('news-cat')?.value.trim();
-  const source_url = document.getElementById('news-url')?.value.trim() || null;
-  const resume = document.getElementById('news-summary')?.value.trim();
-  if (!titre || !resume) { toast('Ajoutez un titre et un résumé.'); return; }
-  const { error } = await supabaseClient.from('vtc_news').insert({ titre, pays, categorie, source_url, resume, publie: true, created_by: profilActuel.id, published_at: new Date().toISOString() });
-  if (error) { console.error(error); toast('Publication impossible.'); return; }
-  toast('Actualité publiée.');
-  actualites();
+
+  if (
+    !droits().news
+  ) {
+    return;
+  }
+
+
+  const titre =
+    document
+      .getElementById(
+        'news-title'
+      )
+      ?.value
+      .trim();
+
+
+  const pays =
+    document
+      .getElementById(
+        'news-country'
+      )
+      ?.value
+      .trim();
+
+
+  const categorie =
+    document
+      .getElementById(
+        'news-cat'
+      )
+      ?.value
+      .trim();
+
+
+  const source_url =
+    document
+      .getElementById(
+        'news-url'
+      )
+      ?.value
+      .trim()
+      ||
+      null;
+
+
+  const resume =
+    document
+      .getElementById(
+        'news-summary'
+      )
+      ?.value
+      .trim();
+
+
+  if (
+    !titre ||
+    !resume
+  ) {
+
+    toast(
+      'Ajoutez un titre et un résumé.'
+    );
+
+    return;
+  }
+
+
+  let error = null;
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const rep =
+      await supabaseClient
+        .from('news_v5')
+        .insert({
+          title: titre,
+          summary: resume,
+          country:
+            pays ||
+            'International',
+          category:
+            categorie ||
+            'Actualité',
+          source_url,
+          published: true
+        });
+
+    error = rep.error;
+
+  } else {
+
+    const rep =
+      await supabaseClient
+        .from('vtc_news')
+        .insert({
+          titre,
+          pays,
+          categorie,
+          source_url,
+          resume,
+          publie: true,
+          created_by:
+            profilActuel.id,
+          published_at:
+            new Date()
+              .toISOString()
+        });
+
+    error = rep.error;
+  }
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      'Publication impossible.'
+    );
+
+    return;
+  }
+
+
+  toast(
+    'Actualité publiée.'
+  );
+
+
+  await actualites();
 }
 
+
 async function procesVerbaux() {
-  if (!droits().secretariat) return;
-  const content = document.getElementById('content');
-  content.innerHTML = `<div class="section-title"><h2>Secrétariat / Procès-verbaux</h2></div><div class="card"><h3>Archiver un PV</h3><div class="form-grid"><div><label>Titre du PV</label><input id="pv-title" placeholder="PV réunion du bureau"></div><div><label>Date de la réunion</label><input id="pv-date" type="date"></div><div><label>Type</label><select id="pv-type"><option>Réunion du bureau</option><option>Assemblée générale</option><option>Réunion de section</option><option>Autre</option></select></div><div><label>Document</label><input id="pv-file" type="file" accept=".pdf,.doc,.docx"></div><div class="full"><label>Résumé</label><textarea id="pv-summary"></textarea></div><div class="full"><button class="btn btn-primary" onclick="archiverPV()">Archiver le PV</button></div></div></div><div class="section-title"><h3>Archives</h3></div><div id="pv-list" class="list"><div class="empty">Chargement...</div></div>`;
+
+  if (
+    !droits().secretariat
+  ) {
+    return;
+  }
+
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+
+  content.innerHTML = `
+
+    <div class="section-title">
+      <h2>
+        Secrétariat / Procès-verbaux
+      </h2>
+    </div>
+
+
+    <div class="card">
+
+      <h3>
+        Archiver un PV
+      </h3>
+
+
+      <div class="form-grid">
+
+        <div>
+
+          <label>
+            Titre du PV
+          </label>
+
+          <input
+            id="pv-title"
+            placeholder="PV réunion du bureau"
+          >
+
+        </div>
+
+
+        <div>
+
+          <label>
+            Date de la réunion
+          </label>
+
+          <input
+            id="pv-date"
+            type="date"
+          >
+
+        </div>
+
+
+        <div class="full">
+
+          <label>
+            Résumé
+          </label>
+
+          <textarea
+            id="pv-summary"
+          ></textarea>
+
+        </div>
+
+
+        <div>
+
+          <label>
+            Document PDF ou Word
+          </label>
+
+          <input
+            id="pv-file"
+            type="file"
+            accept=".pdf,.doc,.docx"
+          >
+
+        </div>
+
+
+        <div
+          style="
+            display:flex;
+            align-items:end
+          "
+        >
+
+          <button
+            class="btn btn-primary"
+            onclick="archiverPV()"
+          >
+            Archiver le PV
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="section-title">
+      <h3>
+        Archives
+      </h3>
+    </div>
+
+
+    <div
+      id="pv-list"
+      class="list"
+    >
+
+      <div class="empty">
+        Chargement...
+      </div>
+
+    </div>
+  `;
+
+
   await chargerPV();
 }
 
+
 async function archiverPV() {
-  if (!droits().secretariat) return;
-  const titre = document.getElementById('pv-title')?.value.trim();
-  const date = document.getElementById('pv-date')?.value;
-  const type = document.getElementById('pv-type')?.value;
-  const resume = document.getElementById('pv-summary')?.value.trim() || null;
-  const file = document.getElementById('pv-file')?.files?.[0];
-  if (!titre || !date || !file) { toast('Ajoutez le titre, la date et le document.'); return; }
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${new Date().getFullYear()}/${profilActuel.id}/${Date.now()}-${safe}`;
-  toast('Envoi du document...');
-  const { error: e1 } = await supabaseClient.storage.from('pv-files').upload(path, file, { upsert: false });
-  if (e1) { console.error(e1); toast("Impossible d'envoyer le fichier."); return; }
-  const { error: e2 } = await supabaseClient.from('pv_documents').insert({ titre, date_reunion: date, type_pv: type, resume, file_path: path, file_name: file.name, created_by: profilActuel.id });
-  if (e2) { console.error(e2); toast("Fichier envoyé mais archivage impossible."); return; }
-  toast('PV archivé.');
-  procesVerbaux();
-}
 
-async function chargerPV() {
-  const zone = document.getElementById('pv-list');
-  const { data, error } = await supabaseClient.from('pv_documents').select('*').order('date_reunion', { ascending: false }).limit(60);
-  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun PV archivé.</div>'; return; }
-  zone.innerHTML = data.map(p => `<div class="list-item"><div><h4>📄 ${echapperHtml(p.titre)}</h4><p>${new Date(p.date_reunion).toLocaleDateString('fr-FR')} · ${echapperHtml(p.type_pv || '')}</p><p>${echapperHtml(p.resume || '')}</p></div><div class="list-actions"><button class="btn btn-light btn-small" onclick="ouvrirPV('${echapperHtml(p.file_path)}')">Ouvrir</button></div></div>`).join('');
-}
-
-async function ouvrirPV(path) {
-  const { data, error } = await supabaseClient.storage.from('pv-files').createSignedUrl(path, 300);
-  if (error || !data?.signedUrl) { toast('Impossible d’ouvrir le document.'); return; }
-  window.open(data.signedUrl, '_blank', 'noopener');
-}
-
-async function finances() {
-  if (!droits().finance) return;
-  const content = document.getElementById('content');
-  content.innerHTML = `<div class="section-title"><h2>Finances ACVTC-CI</h2></div><div class="grid"><div class="kpi"><small>Module</small><b>Trésorerie</b></div><div class="kpi"><small>Cotisation mensuelle</small><b>500 FCFA</b></div><div class="kpi"><small>Retard</small><b>+200 FCFA</b></div></div><div class="card" style="margin-top:14px"><h3>Suivi financier</h3><p>La V5 conserve l'espace Finances pour le Président et les rôles de Trésorerie. Les opérations détaillées pourront être ajoutées ici sans modifier les autres modules.</p></div>`;
-}
-
-async function afficherVerification(token) {
-  document.getElementById('auth-screen')?.classList.add('hide');
-  document.getElementById('app-shell')?.classList.add('hide');
-  document.getElementById('verify-screen')?.classList.remove('hide');
-  const zone = document.getElementById('verify-content');
-  const { data, error } = await supabaseClient.rpc('verify_member_card', { p_token: token });
-  if (error || !data || !data.length) {
-    zone.innerHTML = '<div class="badge badge-red">Carte non reconnue</div><p>Le QR code est invalide ou la carte n’est plus active.</p>';
+  if (
+    !droits().secretariat
+  ) {
     return;
   }
-  const m = data[0];
-  zone.innerHTML = `<div class="verify-person">${m.photo_url ? `<img src="${echapperHtml(m.photo_url)}" alt="Photo membre">` : '<div class="photo-placeholder">👤</div>'}<h2>${echapperHtml(m.nom_complet)}</h2><div class="badge ${m.actif ? 'badge-green' : 'badge-red'}">${m.actif ? 'Carte authentique · membre actif' : 'Membre inactif'}</div><p><b>N° membre :</b> ${echapperHtml(m.numero_membre)}</p><p><b>Section :</b> ${echapperHtml(m.section_nom)}</p><p><b>Rôle :</b> ${echapperHtml(m.role_nom)}</p></div>`;
+
+
+  const titre =
+    document
+      .getElementById(
+        'pv-title'
+      )
+      ?.value
+      .trim();
+
+
+  const date =
+    document
+      .getElementById(
+        'pv-date'
+      )
+      ?.value;
+
+
+  const resume =
+    document
+      .getElementById(
+        'pv-summary'
+      )
+      ?.value
+      .trim()
+      ||
+      null;
+
+
+  const file =
+    document
+      .getElementById(
+        'pv-file'
+      )
+      ?.files?.[0];
+
+
+  if (
+    !titre ||
+    !date ||
+    !file
+  ) {
+
+    toast(
+      'Ajoutez le titre, la date et le document.'
+    );
+
+    return;
+  }
+
+
+  const safe =
+    file.name.replace(
+      /[^a-zA-Z0-9._-]/g,
+      '_'
+    );
+
+
+  const path =
+    `${new Date().getFullYear()}/${authUserId || profilActuel.id}/${Date.now()}-${safe}`;
+
+
+  const bucket =
+    schemaMode === 'v5'
+      ?
+      'minutes-docs'
+      :
+      'pv-files';
+
+
+  toast(
+    'Envoi du document...'
+  );
+
+
+  const { error: uploadError } =
+    await supabaseClient
+      .storage
+      .from(bucket)
+      .upload(
+        path,
+        file,
+        {
+          upsert: false
+        }
+      );
+
+
+  if (uploadError) {
+
+    console.error(
+      uploadError
+    );
+
+    toast(
+      "Impossible d'envoyer le fichier."
+    );
+
+    return;
+  }
+
+
+  let error = null;
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const rep =
+      await supabaseClient
+        .from('minutes_v5')
+        .insert({
+          title: titre,
+          meeting_date: date,
+          summary: resume,
+          file_path: path
+        });
+
+    error = rep.error;
+
+  } else {
+
+    const rep =
+      await supabaseClient
+        .from('pv_documents')
+        .insert({
+          titre,
+          date_reunion: date,
+          type_pv:
+            'Procès-verbal',
+          resume,
+          file_path: path,
+          file_name:
+            file.name,
+          created_by:
+            profilActuel.id
+        });
+
+    error = rep.error;
+  }
+
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      'Fichier envoyé mais archivage impossible.'
+    );
+
+    return;
+  }
+
+
+  toast(
+    'PV archivé.'
+  );
+
+
+  await procesVerbaux();
 }
+
+
+async function chargerPV() {
+
+  const zone =
+    document.getElementById(
+      'pv-list'
+    );
+
+  if (!zone) {
+    return;
+  }
+
+
+  let data = null;
+  let error = null;
+
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const rep =
+      await supabaseClient
+        .from('minutes_v5')
+        .select('*')
+        .order(
+          'meeting_date',
+          {
+            ascending: false
+          }
+        )
+        .limit(60);
+
+    data = rep.data;
+    error = rep.error;
+
+  } else {
+
+    const rep =
+      await supabaseClient
+        .from('pv_documents')
+        .select('*')
+        .order(
+          'date_reunion',
+          {
+            ascending: false
+          }
+        )
+        .limit(60);
+
+    data = rep.data;
+    error = rep.error;
+  }
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun PV archivé.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data
+      .map(
+        p => {
+
+          const titre =
+            p.title ||
+            p.titre;
+
+          const date =
+            p.meeting_date ||
+            p.date_reunion;
+
+          const resume =
+            p.summary ||
+            p.resume ||
+            '';
+
+          return `
+            <div class="list-item">
+
+              <div>
+
+                <h4>
+                  📄
+                  ${echapperHtml(
+                    titre
+                  )}
+                </h4>
+
+                <p>
+                  ${
+                    new Date(
+                      date
+                    )
+                    .toLocaleDateString(
+                      'fr-FR'
+                    )
+                  }
+                </p>
+
+                <p>
+                  ${echapperHtml(
+                    resume
+                  )}
+                </p>
+
+              </div>
+
+
+              ${
+                p.file_path
+                ?
+                `
+                  <button
+                    class="btn btn-light btn-small"
+                    onclick="ouvrirPV('${echapperHtml(
+                      p.file_path
+                    )}')"
+                  >
+                    Ouvrir
+                  </button>
+                `
+                :
+                ''
+              }
+
+            </div>
+          `;
+        }
+      )
+      .join('');
+}
+
+
+async function ouvrirPV(path) {
+
+  const bucket =
+    schemaMode === 'v5'
+      ?
+      'minutes-docs'
+      :
+      'pv-files';
+
+
+  const { data, error } =
+    await supabaseClient
+      .storage
+      .from(bucket)
+      .createSignedUrl(
+        path,
+        300
+      );
+
+
+  if (
+    error ||
+    !data?.signedUrl
+  ) {
+
+    toast(
+      'Impossible d’ouvrir le document.'
+    );
+
+    return;
+  }
+
+
+  window.open(
+    data.signedUrl,
+    '_blank',
+    'noopener'
+  );
+}
+
+
+async function finances() {
+
+  if (
+    !droits().finance
+  ) {
+    return;
+  }
+
+
+  const content =
+    document.getElementById(
+      'content'
+    );
+
+
+  content.innerHTML = `
+
+    <div class="section-title">
+      <h2>
+        Finances ACVTC-CI
+      </h2>
+    </div>
+
+
+    <div class="grid">
+
+      <div class="kpi">
+
+        <small>
+          Cotisation mensuelle
+        </small>
+
+        <b>
+          500 FCFA
+        </b>
+
+      </div>
+
+
+      <div class="kpi">
+
+        <small>
+          Après deux semaines
+        </small>
+
+        <b>
+          700 FCFA
+        </b>
+
+      </div>
+
+    </div>
+
+
+    <div
+      id="finance-list"
+      class="list"
+      style="margin-top:14px"
+    >
+
+      <div class="empty">
+        Chargement...
+      </div>
+
+    </div>
+  `;
+
+
+  const zone =
+    document.getElementById(
+      'finance-list'
+    );
+
+
+  if (
+    schemaMode !== 'v5'
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Module financier ancien disponible.</div>';
+
+    return;
+  }
+
+
+  const { data, error } =
+    await supabaseClient
+      .from(
+        'contributions_v5'
+      )
+      .select(
+        '*, members_v5(nom_complet,numero_membre)'
+      )
+      .order(
+        'updated_at',
+        {
+          ascending: false
+        }
+      )
+      .limit(100);
+
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun paiement enregistré pour le moment.</div>';
+
+    return;
+  }
+
+
+  zone.innerHTML =
+    data
+      .map(
+        c => {
+
+          const total =
+            Number(
+              c.amount || 0
+            )
+            +
+            Number(
+              c.penalty || 0
+            );
+
+
+          return `
+            <div class="list-item">
+
+              <div>
+
+                <h4>
+                  ${
+                    echapperHtml(
+                      c.members_v5
+                        ?.nom_complet
+                        ||
+                      'Membre'
+                    )
+                  }
+                </h4>
+
+                <p>
+                  ${
+                    echapperHtml(
+                      c.members_v5
+                        ?.numero_membre
+                        ||
+                      ''
+                    )
+                  }
+                </p>
+
+                <p>
+                  ${
+                    new Date(
+                      c.period
+                    )
+                    .toLocaleDateString(
+                      'fr-FR',
+                      {
+                        month:
+                          'long',
+                        year:
+                          'numeric'
+                      }
+                    )
+                  }
+                  ·
+                  ${total}
+                  FCFA
+                </p>
+
+                <p>
+                  Statut :
+                  ${echapperHtml(
+                    c.status
+                  )}
+                </p>
+
+              </div>
+
+            </div>
+          `;
+        }
+      )
+      .join('');
+}
+
+
+async function afficherVerification(
+  token
+) {
+
+  document
+    .getElementById(
+      'auth-screen'
+    )
+    ?.classList.add(
+      'hide'
+    );
+
+
+  document
+    .getElementById(
+      'app-shell'
+    )
+    ?.classList.add(
+      'hide'
+    );
+
+
+  document
+    .getElementById(
+      'verify-screen'
+    )
+    ?.classList.remove(
+      'hide'
+    );
+
+
+  const zone =
+    document.getElementById(
+      'verify-content'
+    );
+
+
+  let data = null;
+  let error = null;
+
+
+  let rep =
+    await supabaseClient.rpc(
+      'verify_member_card_v5',
+      {
+        p_token: token
+      }
+    );
+
+
+  if (
+    !rep.error &&
+    rep.data &&
+    rep.data.length
+  ) {
+
+    data = rep.data;
+    schemaMode = 'v5';
+
+  } else {
+
+    rep =
+      await supabaseClient.rpc(
+        'verify_member_card',
+        {
+          p_token: token
+        }
+      );
+
+    data = rep.data;
+    error = rep.error;
+  }
+
+
+  if (
+    error ||
+    !data ||
+    !data.length
+  ) {
+
+    zone.innerHTML = `
+      <div class="badge badge-red">
+        Carte non reconnue
+      </div>
+
+      <p>
+        Le QR code est invalide
+        ou la carte n’est plus active.
+      </p>
+    `;
+
+    return;
+  }
+
+
+  const m =
+    data[0];
+
+
+  zone.innerHTML = `
+
+    <div class="verify-person">
+
+      ${
+        m.photo_url
+        ?
+        `
+          <img
+            src="${echapperHtml(
+              m.photo_url
+            )}"
+            alt="Photo membre"
+          >
+        `
+        :
+        `
+          <div class="photo-placeholder">
+            👤
+          </div>
+        `
+      }
+
+
+      <h2>
+        ${echapperHtml(
+          m.nom_complet
+        )}
+      </h2>
+
+
+      <div
+        class="badge ${
+          m.actif
+          ?
+          'badge-green'
+          :
+          'badge-red'
+        }"
+      >
+
+        ${
+          m.actif
+          ?
+          'Carte authentique · membre actif'
+          :
+          'Membre inactif'
+        }
+
+      </div>
+
+
+      <p>
+        <b>N° membre :</b>
+        ${echapperHtml(
+          m.numero_membre
+        )}
+      </p>
+
+
+      <p>
+        <b>Section :</b>
+        ${echapperHtml(
+          m.section_nom
+        )}
+      </p>
+
+
+      <p>
+        <b>Rôle :</b>
+        ${echapperHtml(
+          m.role_nom
+        )}
+      </p>
+
+    </div>
+  `;
+}
+
 
 async function logout() {
-  await supabaseClient.auth.signOut();
+
+  await supabaseClient
+    .auth
+    .signOut();
+
+
   profilActuel = null;
-  window.location.href = window.location.pathname;
+
+  authUserId = null;
+
+  schemaMode = 'unknown';
+
+
+  window.location.href =
+    window.location.pathname;
 }
 
+
 async function demarrer() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  const params = new URLSearchParams(window.location.search);
-  const verify = params.get('verify');
-  if (verify) { await afficherVerification(verify); return; }
+
+  if (
+    'serviceWorker'
+    in navigator
+  ) {
+
+    navigator
+      .serviceWorker
+      .register(
+        '/sw.js'
+      )
+      .catch(
+        e =>
+          console.warn(
+            'Service Worker',
+            e
+          )
+      );
+  }
+
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+
+  const verify =
+    params.get(
+      'verify'
+    );
+
+
+  if (verify) {
+
+    await afficherVerification(
+      verify
+    );
+
+    return;
+  }
+
+
   await chargerReferentiels();
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session?.user) await chargerProfil(session.user);
+
+
+  const {
+    data: {
+      session
+    }
+  } =
+    await supabaseClient
+      .auth
+      .getSession();
+
+
+  if (
+    session?.user
+  ) {
+
+    await chargerProfil(
+      session.user
+    );
+  }
 }
+
 
 demarrer();
