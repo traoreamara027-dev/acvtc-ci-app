@@ -1,1 +1,6 @@
-{"name":"acvtc-ci-v1","version":"1.0.0","private":true,"scripts":{"start":"npx serve -s . -l 3000"},"dependencies":{"serve":"^14.2.4"}}
+{
+  "name": "acvtc-ci-v5",
+  "version": "5.0.0",
+  "private": true,
+  "scripts": {"start": "npx serve ."}
+}

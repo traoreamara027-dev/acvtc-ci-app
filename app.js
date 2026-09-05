@@ -1,25 +1,14 @@
 const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HeE36KA4qTxB3jfo98Uvtg_mQSvG350';
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let profilActuel = null;
+let sectionsCache = { 1: 'Abidjan', 2: 'Bouaké', 3: 'Yamoussoukro' };
+let rolesCache = { 1: 'Président' };
 
-let sectionsCache = {
-  1: 'Abidjan',
-  2: 'Bouaké',
-  3: 'Yamoussoukro'
-};
-
-let rolesCache = {
-  1: 'Président'
-};
-
-function echapperHtml(valeur) {
-  return String(valeur ?? '')
+function echapperHtml(v) {
+  return String(v ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -27,1001 +16,459 @@ function echapperHtml(valeur) {
     .replaceAll("'", '&#039;');
 }
 
-function nomSection(sectionId) {
-  return sectionsCache[Number(sectionId)] || `Section ${sectionId || '-'}`;
+function sansAccent(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
-function nomRole(roleId) {
-  return rolesCache[Number(roleId)] || `Rôle ${roleId || '-'}`;
+function normaliserTelephone(v) {
+  let s = String(v || '').replace(/[^0-9+]/g, '');
+  if (!s) return '';
+  if (s.startsWith('+')) return s;
+  if (s.startsWith('225')) return `+${s}`;
+  if (s.startsWith('0')) return `+225${s.slice(1)}`;
+  return `+225${s}`;
+}
+
+function nomSection(id) { return sectionsCache[Number(id)] || `Section ${id || '-'}`; }
+function nomRole(id) { return rolesCache[Number(id)] || `Rôle ${id || '-'}`; }
+function nomComplet(p = profilActuel) {
+  if (!p) return '';
+  return p.nom_complet || [p.prenoms, p.nom].filter(Boolean).join(' ') || 'Membre ACVTC-CI';
+}
+
+function droits() {
+  const role = sansAccent(nomRole(profilActuel?.role_id));
+  const president = role === 'president';
+  const membre = role === 'membre';
+  const admin = !!profilActuel && !membre;
+  const secretariat = president || role.includes('secretaire');
+  const finance = president || role.includes('tresor');
+  return { role, president, membre, admin, secretariat, finance };
+}
+
+function toast(message, duree = 3200) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hide');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => el.classList.add('hide'), duree);
+}
+
+function setAuthMessage(message, erreur = false) {
+  const el = document.getElementById('auth-message');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = erreur ? '#b42318' : '#163F73';
 }
 
 async function chargerReferentiels() {
-  const { data: sections, error: erreurSections } =
-    await supabaseClient.rpc('list_sections');
-
-  if (!erreurSections && Array.isArray(sections)) {
-    sections.forEach((s) => {
-      sectionsCache[Number(s.id)] = s.nom;
-    });
-  }
-
-  const { data: roles, error: erreurRoles } =
-    await supabaseClient.rpc('list_roles');
-
-  if (!erreurRoles && Array.isArray(roles)) {
-    roles.forEach((r) => {
-      rolesCache[Number(r.id)] = r.nom;
-    });
-  }
+  const [{ data: sections }, { data: roles }] = await Promise.all([
+    supabaseClient.rpc('list_sections'),
+    supabaseClient.rpc('list_roles')
+  ]);
+  (sections || []).forEach(s => sectionsCache[Number(s.id)] = s.nom);
+  (roles || []).forEach(r => rolesCache[Number(r.id)] = r.nom);
 }
 
-/* =========================
-   MESSAGE DE CONNEXION
-========================= */
-
-function messageConnexion(message, erreur = false) {
-  const zone = document.getElementById('login-message');
-
-  if (!zone) return;
-
-  zone.textContent = message;
-  zone.style.color = erreur ? '#b91c1c' : '#123b70';
-}
-
-/* =========================
-   CONNEXION
-========================= */
-
-async function renvoyerConfirmation() {
-  const email = document.getElementById('user').value.trim();
-
-  const { error } = await supabaseClient.auth.resend({
-    type: 'signup',
-    email: email
-  });
-
-  if (error) {
-    alert("Erreur : " + error.message);
-  } else {
-    alert("Un nouvel e-mail de confirmation a été envoyé.");
-  }
-}
-async function login() {
-  const champEmail = document.getElementById('user');
-  const champPass = document.getElementById('pass');
-
-  if (!champEmail || !champPass) return;
-
-  const email = champEmail.value.trim();
-  const password = champPass.value;
-
-  if (!email || !password) {
-    messageConnexion(
-      'Veuillez saisir votre adresse e-mail et votre mot de passe.',
-      true
-    );
+async function envoyerCode() {
+  const phone = normaliserTelephone(document.getElementById('phone')?.value);
+  if (!phone || phone.length < 12) {
+    setAuthMessage('Saisissez un numéro de téléphone valide.', true);
     return;
   }
-
-  messageConnexion('Connexion en cours...');
-
-  const { data, error } =
-    await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
-
+  setAuthMessage('Envoi du code en cours...');
+  const { error } = await supabaseClient.auth.signInWithOtp({
+    phone,
+    options: { shouldCreateUser: true }
+  });
   if (error) {
     console.error(error);
-
-    messageConnexion(
-      'Connexion impossible. Vérifiez votre adresse e-mail et votre mot de passe.',
-      true
-    );
+    setAuthMessage("Impossible d'envoyer le SMS. Vérifiez que l'authentification par téléphone est activée dans Supabase.", true);
     return;
   }
+  document.getElementById('otp-zone')?.classList.remove('hide');
+  setAuthMessage('Code envoyé par SMS. Saisissez-le ci-dessous.');
+}
 
-  if (!data?.user) {
-    messageConnexion('Utilisateur introuvable.', true);
+async function verifierCode() {
+  const phone = normaliserTelephone(document.getElementById('phone')?.value);
+  const token = String(document.getElementById('otp')?.value || '').trim();
+  if (!phone || token.length < 6) {
+    setAuthMessage('Saisissez votre numéro et le code à 6 chiffres.', true);
     return;
   }
-
+  setAuthMessage('Vérification en cours...');
+  const { data, error } = await supabaseClient.auth.verifyOtp({ phone, token, type: 'sms' });
+  if (error || !data?.user) {
+    console.error(error);
+    setAuthMessage('Code incorrect ou expiré.', true);
+    return;
+  }
   await chargerProfil(data.user);
 }
 
-/* =========================
-   PROFIL
-========================= */
+async function legacyLogin() {
+  const email = document.getElementById('legacy-email')?.value.trim();
+  const password = document.getElementById('legacy-pass')?.value || '';
+  if (!email || !password) {
+    setAuthMessage("Saisissez l'e-mail et le mot de passe de l'ancien compte.", true);
+    return;
+  }
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error || !data?.user) {
+    console.error(error);
+    setAuthMessage('Connexion impossible.', true);
+    return;
+  }
+  await chargerProfil(data.user);
+}
 
 async function chargerProfil(user) {
   await chargerReferentiels();
+  try { await supabaseClient.rpc('claim_phone_profile'); } catch (e) { console.warn(e); }
 
-  const { data: profil, error } =
-    await supabaseClient
-      .from('profiles')
-      .select(
-        'id, nom, prenoms, telephone, photo_url, section_id, role_id, numero_membre, actif'
-      )
-      .eq('id', user.id)
-      .single();
+  const { data: profil, error } = await supabaseClient
+    .from('profiles')
+    .select('id, nom, prenoms, nom_complet, telephone, phone_e164, photo_url, section_id, role_id, numero_membre, actif, verification_token')
+    .eq('id', user.id)
+    .single();
 
   if (error || !profil) {
     console.error(error);
-
-    messageConnexion(
-      'Compte connecté, mais le profil ACVTC-CI est introuvable.',
-      true
-    );
-
+    setAuthMessage("Votre téléphone est reconnu, mais aucun profil ACVTC-CI n'a encore été préparé par un administrateur.", true);
     await supabaseClient.auth.signOut();
     return;
   }
-
   if (profil.actif === false) {
-    messageConnexion(
-      'Ce compte ACVTC-CI est désactivé.',
-      true
-    );
-
+    setAuthMessage('Ce compte ACVTC-CI est désactivé.', true);
     await supabaseClient.auth.signOut();
     return;
   }
-
   profilActuel = profil;
-
-  sessionStorage.setItem(
-    'acvtc_profil',
-    JSON.stringify(profil)
-  );
-
-  afficherApplication(profil);
+  afficherApplication();
 }
 
-/* =========================
-   APPLICATION
-========================= */
+function afficherApplication() {
+  document.getElementById('auth-screen')?.classList.add('hide');
+  document.getElementById('verify-screen')?.classList.add('hide');
+  document.getElementById('app-shell')?.classList.remove('hide');
+  const hu = document.getElementById('header-user');
+  if (hu) hu.innerHTML = `<b>${echapperHtml(nomComplet())}</b><span>${echapperHtml(nomRole(profilActuel.role_id))} · ${echapperHtml(nomSection(profilActuel.section_id))}</span>`;
+  afficherNavigation();
+  accueil();
+}
 
-function afficherApplication(profil) {
-  const loginZone = document.getElementById('login');
-  const appZone = document.getElementById('app');
-  const boutonOut = document.getElementById('out');
+function afficherNavigation() {
+  const d = droits();
   const nav = document.getElementById('nav');
-
-  if (loginZone) loginZone.classList.add('hide');
-  if (appZone) appZone.classList.remove('hide');
-  if (boutonOut) boutonOut.classList.remove('hide');
-
   if (!nav) return;
-
-  let boutons = `
-    <button onclick="home()">Accueil</button>
-    <button onclick="card()">Ma carte</button>
-    <button onclick="dues()">Cotisations</button>
-  `;
-
-  if (Number(profil.role_id) === 1) {
-    boutons += `
-      <button onclick="members()">Membres</button>
-      <button onclick="finance()">Finances</button>
-    `;
-  }
-
-  nav.innerHTML = boutons;
-
-  home();
+  const items = [
+    ['accueil()', 'Accueil'], ['maCarte()', 'Ma carte'], ['cotisations()', 'Cotisations'],
+    ['actualites()', 'Actualités'], ['messages()', 'Messages']
+  ];
+  if (d.admin) items.push(['membres()', 'Membres']);
+  if (d.secretariat) items.push(['procesVerbaux()', 'PV']);
+  if (d.finance) items.push(['finances()', 'Finances']);
+  nav.innerHTML = items.map(([fn, label]) => `<button onclick="${fn}">${label}</button>`).join('');
 }
 
-/* =========================
-   ACCUEIL
-========================= */
-
-function home() {
-  if (!profilActuel) return;
-
+async function accueil() {
   const content = document.getElementById('content');
-  if (!content) return;
-
+  const d = droits();
   content.innerHTML = `
-    <div class="card">
-      <h2>
-        Bienvenue
-        ${echapperHtml(profilActuel.prenoms || '')}
-        ${echapperHtml(profilActuel.nom || '')}
-      </h2>
-
-      <p>
-        <b>Numéro membre :</b>
-        ${echapperHtml(profilActuel.numero_membre || '-')}
-      </p>
-
-      <p>
-        <b>Téléphone :</b>
-        ${echapperHtml(profilActuel.telephone || '-')}
-      </p>
-
-      <p>
-        <b>Section :</b>
-        ${echapperHtml(nomSection(profilActuel.section_id))}
-      </p>
-
-      <p>
-        <b>Rôle :</b>
-        ${echapperHtml(nomRole(profilActuel.role_id))}
-      </p>
-
-      <p><b>Statut :</b> Compte actif</p>
+    <div class="card hero">
+      <h2>Bienvenue, ${echapperHtml(nomComplet())}</h2>
+      <p>${echapperHtml(nomRole(profilActuel.role_id))} · ${echapperHtml(nomSection(profilActuel.section_id))}</p>
+      <span class="badge badge-green">● Compte actif</span>
     </div>
-  `;
+    <div class="section-title"><h2>Mon espace</h2></div>
+    <div class="grid dashboard-grid">
+      <button class="quick navy" onclick="messages()"><span class="icon">📢</span><b>Messages aux conducteurs</b><small>Réunions, convocations et informations.</small></button>
+      <button class="quick red" onclick="actualites()"><span class="icon">🌍</span><b>Actualités VTC</b><small>Côte d'Ivoire et monde.</small></button>
+      <button class="quick" onclick="maCarte()"><span class="icon">🪪</span><b>Ma carte</b><small>Photo et QR de vérification.</small></button>
+      <button class="quick" onclick="cotisations()"><span class="icon">💳</span><b>Cotisations</b><small>500 FCFA / 700 FCFA après retard.</small></button>
+      ${d.admin ? `<button class="quick" onclick="membres()"><span class="icon">👥</span><b>Membres</b><small>Ajouter et consulter les membres.</small></button>` : ''}
+      ${d.secretariat ? `<button class="quick" onclick="procesVerbaux()"><span class="icon">📁</span><b>Secrétariat / PV</b><small>Archivage des procès-verbaux.</small></button>` : ''}
+      ${d.finance ? `<button class="quick" onclick="finances()"><span class="icon">📊</span><b>Finances</b><small>Suivi financier de l'association.</small></button>` : ''}
+    </div>
+    <div class="section-title"><h2>Informations importantes</h2></div>
+    <div id="home-messages" class="list"><div class="empty">Chargement...</div></div>
+    <div class="section-title"><h2>Dernières actualités VTC</h2><button class="btn btn-light btn-small" onclick="actualites()">Voir tout</button></div>
+    <div id="home-news" class="list"><div class="empty">Chargement...</div></div>`;
+  await Promise.all([chargerMessagesAccueil(), chargerActualitesAccueil()]);
 }
 
-/* =========================
-   CARTE
-========================= */
-
-function card() {
-  if (!profilActuel) return;
-
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  const photo = profilActuel.photo_url
-    ? `
-      <img
-        src="${echapperHtml(profilActuel.photo_url)}"
-        alt="Photo membre"
-        style="
-          width:120px;
-          height:120px;
-          object-fit:cover;
-          border-radius:12px;
-          margin-bottom:15px;
-        "
-      >
-    `
-    : '';
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Carte membre ACVTC-CI</h2>
-
-      ${photo}
-
-      <h3>
-        ${echapperHtml(profilActuel.prenoms || '')}
-        ${echapperHtml(profilActuel.nom || '')}
-      </h3>
-
-      <p>
-        <b>Numéro :</b>
-        ${echapperHtml(profilActuel.numero_membre || '-')}
-      </p>
-
-      <p>
-        <b>Téléphone :</b>
-        ${echapperHtml(profilActuel.telephone || '-')}
-      </p>
-
-      <p>
-        <b>Section :</b>
-        ${echapperHtml(nomSection(profilActuel.section_id))}
-      </p>
-
-      <p>
-        <b>Rôle :</b>
-        ${echapperHtml(nomRole(profilActuel.role_id))}
-      </p>
-
-      <p><b>Statut :</b> ACTIF</p>
-    </div>
-  `;
-}
-
-/* =========================
-   COTISATIONS
-========================= */
-
-function dues() {
-  if (!profilActuel) return;
-
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Cotisations ACVTC-CI</h2>
-
-      <p>
-        <b>Membre :</b>
-        ${echapperHtml(profilActuel.prenoms || '')}
-        ${echapperHtml(profilActuel.nom || '')}
-      </p>
-
-      <p>
-        <b>Numéro membre :</b>
-        ${echapperHtml(profilActuel.numero_membre || '-')}
-      </p>
-
-      <p>Cotisation mensuelle : <b>500 FCFA</b></p>
-
-      <p>
-        Après deux semaines de retard :
-        <b>700 FCFA</b>
-      </p>
-    </div>
-  `;
-}
-
-/* =========================
-   MEMBRES
-========================= */
-
-async function members() {
-  if (!profilActuel) return;
-  if (Number(profilActuel.role_id) !== 1) return;
-
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Membres ACVTC-CI</h2>
-      <p>Chargement...</p>
-    </div>
-  `;
-
-  await chargerReferentiels();
-
-  const { data: membres, error } =
-    await supabaseClient
-      .from('profiles')
-      .select(
-        'id, nom, prenoms, telephone, section_id, role_id, numero_membre, actif'
-      )
-      .order('nom', { ascending: true })
-      .order('prenoms', { ascending: true });
-
-  if (error) {
-    console.error(error);
-
-    content.innerHTML = `
-      <div class="card">
-        <h2>Membres ACVTC-CI</h2>
-        <p style="color:#b91c1c;">
-          Impossible de charger la liste des membres.
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  const liste = Array.isArray(membres) ? membres : [];
-
-  const lignes = liste.map((membre) => `
-    <div
-      style="
-        border:1px solid #d8dee9;
-        border-radius:12px;
-        padding:14px;
-        margin:12px 0;
-        background:#ffffff;
-      "
-    >
-      <h3 style="margin:0 0 8px 0;">
-        ${echapperHtml(membre.prenoms || '')}
-        ${echapperHtml(membre.nom || '')}
-      </h3>
-
-      <p style="margin:5px 0;">
-        <b>N° membre :</b>
-        ${echapperHtml(membre.numero_membre || '-')}
-      </p>
-
-      <p style="margin:5px 0;">
-        <b>Téléphone :</b>
-        ${echapperHtml(membre.telephone || '-')}
-      </p>
-
-      <p style="margin:5px 0;">
-        <b>Section :</b>
-        ${echapperHtml(nomSection(membre.section_id))}
-      </p>
-
-      <p style="margin:5px 0;">
-        <b>Rôle :</b>
-        ${echapperHtml(nomRole(membre.role_id))}
-      </p>
-
-      <p style="margin:5px 0;">
-        <b>Statut :</b>
-        ${membre.actif === false ? 'Désactivé' : 'Actif'}
-      </p>
-    </div>
-  `).join('');
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Membres ACVTC-CI</h2>
-
-      <button
-        onclick="afficherFormulaireInvitation()"
-        style="margin-bottom:16px;"
-      >
-        + Ajouter un membre
-      </button>
-
-      <p><b>Total :</b> ${liste.length}</p>
-
-      ${lignes || '<p>Aucun membre enregistré.</p>'}
-    </div>
-  `;
-}
-
-/* =========================
-   FORMULAIRE INVITATION
-========================= */
-
-async function afficherFormulaireInvitation() {
-  if (!profilActuel || Number(profilActuel.role_id) !== 1) return;
-
-  const content = document.getElementById('content');
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Ajouter un membre</h2>
-      <p>Chargement des sections et des rôles...</p>
-    </div>
-  `;
-
-  const { data: sections, error: erreurSections } =
-    await supabaseClient.rpc('list_sections');
-
-  const { data: roles, error: erreurRoles } =
-    await supabaseClient.rpc('list_roles');
-
-  if (erreurSections || erreurRoles) {
-    console.error(erreurSections || erreurRoles);
-
-    content.innerHTML = `
-      <div class="card">
-        <h2>Ajouter un membre</h2>
-        <p style="color:#b91c1c;">
-          Impossible de charger les sections ou les rôles.
-        </p>
-        <button onclick="members()">Retour</button>
-      </div>
-    `;
-    return;
-  }
-
-  (sections || []).forEach((s) => {
-    sectionsCache[Number(s.id)] = s.nom;
-  });
-
-  (roles || []).forEach((r) => {
-    rolesCache[Number(r.id)] = r.nom;
-  });
-
-  const optionsSections = (sections || [])
-    .map(
-      (s) =>
-        `<option value="${Number(s.id)}">${echapperHtml(s.nom)}</option>`
-    )
-    .join('');
-
-  const optionsRoles = (roles || [])
-    .map(
-      (r) =>
-        `<option value="${Number(r.id)}">${echapperHtml(r.nom)}</option>`
-    )
-    .join('');
-
-  content.innerHTML = `
-    <div class="card">
-      <h2>Ajouter un membre</h2>
-
-      <p>
-        Le lien d'invitation sera valable pendant 7 jours.
-      </p>
-
-      <label><b>Adresse e-mail</b></label>
-      <input
-        id="invite-email"
-        type="email"
-        placeholder="exemple@gmail.com"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          margin:8px 0 14px;
-        "
-      >
-
-      <label><b>Téléphone</b></label>
-      <input
-        id="invite-telephone"
-        type="tel"
-        placeholder="07xxxxxxxx"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          margin:8px 0 14px;
-        "
-      >
-
-      <label><b>Section</b></label>
-      <select
-        id="invite-section"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          margin:8px 0 14px;
-          padding:12px;
-        "
-      >
-        ${optionsSections}
-      </select>
-
-      <label><b>Rôle</b></label>
-      <select
-        id="invite-role"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          margin:8px 0 14px;
-          padding:12px;
-        "
-      >
-        ${optionsRoles}
-      </select>
-
-      <button onclick="creerInvitation()">
-        Générer le lien d'invitation
-      </button>
-
-      <button
-        onclick="members()"
-        style="margin-left:8px;"
-      >
-        Annuler
-      </button>
-
-      <div
-        id="invite-result"
-        style="margin-top:18px;"
-      ></div>
-    </div>
-  `;
-}
-
-/* =========================
-   CRÉER INVITATION
-========================= */
-
-async function creerInvitation() {
-  const email =
-    document.getElementById('invite-email')?.value.trim() || '';
-
-  const telephone =
-    document.getElementById('invite-telephone')?.value.trim() || '';
-
-  const sectionId =
-    Number(document.getElementById('invite-section')?.value);
-
-  const roleId =
-    Number(document.getElementById('invite-role')?.value);
-
-  const zone = document.getElementById('invite-result');
-
+async function chargerMessagesAccueil() {
+  const zone = document.getElementById('home-messages');
   if (!zone) return;
-
-  if (!email || !sectionId || !roleId) {
-    zone.innerHTML = `
-      <p style="color:#b91c1c;">
-        Renseignez l'e-mail, la section et le rôle.
-      </p>
-    `;
-    return;
-  }
-
-  zone.innerHTML = '<p>Création de l’invitation...</p>';
-
-  const { data: token, error } =
-    await supabaseClient.rpc(
-      'create_invitation',
-      {
-        p_email: email,
-        p_telephone: telephone || null,
-        p_role_id: roleId,
-        p_section_id: sectionId
-      }
-    );
-
-  if (error || !token) {
-    console.error(error);
-
-    zone.innerHTML = `
-      <p style="color:#b91c1c;">
-        Impossible de créer l'invitation.
-      </p>
-    `;
-    return;
-  }
-
-  const lien =
-    `${window.location.origin}${window.location.pathname}` +
-    `?invite=${encodeURIComponent(token)}`;
-
-  zone.innerHTML = `
-    <p><b>Invitation créée ✅</b></p>
-
-    <p>Envoyez ce lien au membre :</p>
-
-    <input
-      id="invitation-link"
-      value="${echapperHtml(lien)}"
-      readonly
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 12px;
-      "
-    >
-
-    <button onclick="copierLienInvitation()">
-      Copier le lien
-    </button>
-  `;
+  let q = supabaseClient.from('messages').select('*').eq('publie', true).order('created_at', { ascending: false }).limit(4);
+  const { data, error } = await q;
+  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun message important pour le moment.</div>'; return; }
+  const filtered = data.filter(m => !m.section_id || Number(m.section_id) === Number(profilActuel.section_id));
+  zone.innerHTML = filtered.length ? filtered.map(m => messageHtml(m)).join('') : '<div class="empty">Aucun message pour votre section.</div>';
 }
 
-async function copierLienInvitation() {
-  const champ = document.getElementById('invitation-link');
-  if (!champ) return;
-
-  try {
-    await navigator.clipboard.writeText(champ.value);
-    alert('Lien copié.');
-  } catch (e) {
-    champ.focus();
-    champ.select();
-    document.execCommand('copy');
-    alert('Lien copié.');
-  }
+async function chargerActualitesAccueil() {
+  const zone = document.getElementById('home-news');
+  if (!zone) return;
+  const { data, error } = await supabaseClient.from('vtc_news').select('*').eq('publie', true).order('published_at', { ascending: false }).limit(3);
+  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Les actualités seront publiées ici par le bureau.</div>'; return; }
+  zone.innerHTML = data.map(n => newsHtml(n)).join('');
 }
 
-/* =========================
-   PAGE INSCRIPTION
-========================= */
-
-async function afficherInscriptionInvitation(token) {
-  const loginZone = document.getElementById('login');
-  const appZone = document.getElementById('app');
-  const boutonOut = document.getElementById('out');
-
-  if (!loginZone) return;
-
-  if (appZone) appZone.classList.add('hide');
-  if (boutonOut) boutonOut.classList.add('hide');
-
-  loginZone.classList.remove('hide');
-
-  loginZone.innerHTML = `
-    <h2>Invitation ACVTC-CI</h2>
-    <p>Vérification de l'invitation...</p>
-  `;
-
-  const { data, error } =
-    await supabaseClient.rpc(
-      'invitation_info',
-      { p_token: token }
-    );
-
-  if (
-    error ||
-    !Array.isArray(data) ||
-    data.length === 0
-  ) {
-    console.error(error);
-
-    loginZone.innerHTML = `
-      <h2>Invitation ACVTC-CI</h2>
-
-      <p style="color:#b91c1c;">
-        Ce lien est invalide, expiré ou déjà utilisé.
-      </p>
-
-      <button onclick="retourConnexion()">
-        Retour à la connexion
-      </button>
-    `;
-    return;
-  }
-
-  const invitation = data[0];
-
-  loginZone.innerHTML = `
-    <h2>Créer mon compte ACVTC-CI</h2>
-
-    <p>
-      <b>Section :</b>
-      ${echapperHtml(invitation.section_nom)}
-      <br>
-      <b>Rôle :</b>
-      ${echapperHtml(invitation.role_nom)}
-    </p>
-
-    <label><b>Nom</b></label>
-    <input
-      id="signup-nom"
-      type="text"
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <label><b>Prénoms</b></label>
-    <input
-      id="signup-prenoms"
-      type="text"
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <label><b>E-mail</b></label>
-    <input
-      id="signup-email"
-      type="email"
-      value="${echapperHtml(invitation.email)}"
-      readonly
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <label><b>Téléphone</b></label>
-    <input
-      id="signup-telephone"
-      type="tel"
-      value="${echapperHtml(invitation.telephone || '')}"
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <label><b>Mot de passe</b></label>
-    <input
-      id="signup-password"
-      type="password"
-      minlength="6"
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <label><b>Confirmer le mot de passe</b></label>
-    <input
-      id="signup-password2"
-      type="password"
-      minlength="6"
-      style="
-        width:100%;
-        box-sizing:border-box;
-        margin:8px 0 14px;
-      "
-    >
-
-    <button
-      id="signup-button"
-      onclick="creerCompteInvitation()"
-    >
-      Créer mon compte
-    </button>
-
-    <button
-      onclick="retourConnexion()"
-      style="margin-left:8px;"
-    >
-      Annuler
-    </button>
-
-    <p id="signup-message"></p>
-  `;
-
-  loginZone.dataset.invitationToken = token;
+function messageHtml(m) {
+  return `<article class="list-item"><div><h4>${m.important ? '🔴 ' : '📢 '}${echapperHtml(m.titre)}</h4><p>${echapperHtml(m.contenu)}</p><p>${m.section_id ? echapperHtml(nomSection(m.section_id)) : 'Tous les conducteurs'}</p></div></article>`;
 }
 
-/* =========================
-   CRÉER COMPTE INVITÉ
-========================= */
-
-async function creerCompteInvitation() {
-  const loginZone = document.getElementById('login');
-  const zone = document.getElementById('signup-message');
-
-  if (!loginZone || !zone) return;
-
-  const token = loginZone.dataset.invitationToken || '';
-
-  const nom =
-    document.getElementById('signup-nom')?.value.trim() || '';
-
-  const prenoms =
-    document.getElementById('signup-prenoms')?.value.trim() || '';
-
-  const email =
-    document.getElementById('signup-email')?.value.trim() || '';
-
-  const telephone =
-    document.getElementById('signup-telephone')?.value.trim() || '';
-
-  const password =
-    document.getElementById('signup-password')?.value || '';
-
-  const password2 =
-    document.getElementById('signup-password2')?.value || '';
-
-  if (!nom || !prenoms || !email || !password) {
-    zone.style.color = '#b91c1c';
-    zone.textContent =
-      'Veuillez compléter tous les champs obligatoires.';
-    return;
-  }
-
-  if (password.length < 6) {
-    zone.style.color = '#b91c1c';
-    zone.textContent =
-      'Le mot de passe doit contenir au moins 6 caractères.';
-    return;
-  }
-
-  if (password !== password2) {
-    zone.style.color = '#b91c1c';
-    zone.textContent =
-      'Les deux mots de passe sont différents.';
-    return;
-  }
-
-  zone.style.color = '#123b70';
-  zone.textContent = 'Création du compte en cours...';
-
-  const { data, error } =
-    await supabaseClient.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo:
-          `${window.location.origin}${window.location.pathname}`,
-        data: {
-          invitation_token: token,
-          nom,
-          prenoms,
-          telephone
-        }
-      }
-    });
-
-  if (error) {
-    console.error(error);
-
-    zone.style.color = '#b91c1c';
-    zone.textContent =
-      `Inscription impossible : ${error.message}`;
-    return;
-  }
-
-  if (data?.session && data?.user) {
-    history.replaceState(
-      {},
-      '',
-      window.location.pathname
-    );
-
-    await chargerProfil(data.user);
-    return;
-  }
-
-  zone.style.color = '#123b70';
-
-  zone.innerHTML = `
-    Compte créé.
-    Vérifiez votre e-mail pour confirmer votre inscription,
-    puis revenez vous connecter.
-    <br><br>
-    <button onclick="retourConnexion()">
-      Aller à la connexion
-    </button>
-  `;
+function newsHtml(n) {
+  const lien = n.source_url ? `<a class="news-source" href="${echapperHtml(n.source_url)}" target="_blank" rel="noopener">Voir la source ↗</a>` : '';
+  return `<article class="list-item"><div><h4>🌍 ${echapperHtml(n.titre)}</h4><p><b>${echapperHtml(n.pays || 'International')}</b> · ${echapperHtml(n.categorie || 'Actualité VTC')}</p><p>${echapperHtml(n.resume || '')}</p>${lien}</div></article>`;
 }
 
-function retourConnexion() {
-  window.location.href =
-    `${window.location.origin}${window.location.pathname}`;
-}
-
-/* =========================
-   FINANCES
-========================= */
-
-function finance() {
-  if (!profilActuel) return;
-  if (Number(profilActuel.role_id) !== 1) return;
-
+async function maCarte() {
   const content = document.getElementById('content');
-  if (!content) return;
-
+  const photo = profilActuel.photo_url
+    ? `<img class="profile-photo" src="${echapperHtml(profilActuel.photo_url)}" alt="Photo du membre">`
+    : `<div class="photo-placeholder">👤</div>`;
+  const token = profilActuel.verification_token || '';
   content.innerHTML = `
-    <div class="card">
-      <h2>Finances ACVTC-CI</h2>
-      <p>Tableau de gestion financière de l'association.</p>
-      <p>• Cotisations</p>
-      <p>• Paiements</p>
-      <p>• Retards</p>
-      <p>• Recettes</p>
-      <p>• Synthèses financières</p>
+    <div class="section-title"><h2>Ma carte de membre</h2></div>
+    <div id="member-card" class="member-card">
+      <div class="member-card-head"><img src="/logo-acvtc.png" alt="ACVTC-CI"><div><b>ASSOCIATION DES CHAUFFEURS DE VTC CÔTE D'IVOIRE</b><div class="note">On travaille aujourd'hui pour le bonheur de demain.</div></div></div>
+      <div class="member-card-body">
+        <div>${photo}<div id="qrcode" class="qrbox" style="margin-top:10px"></div></div>
+        <div><h2>${echapperHtml(nomComplet())}</h2><p><b>N° membre :</b> ${echapperHtml(profilActuel.numero_membre || 'En cours d’attribution')}</p><p><b>Section :</b> ${echapperHtml(nomSection(profilActuel.section_id))}</p><p><b>Statut :</b> <span class="badge badge-green">Actif</span></p><p><b>Rôle :</b> ${echapperHtml(nomRole(profilActuel.role_id))}</p><p class="note">Scannez le QR code pour vérifier l'authenticité de la carte.</p></div>
+      </div>
+      <div class="member-card-foot"><b>ACVTC-CI</b><span>Plus qu'une association, une grande famille.</span></div>
     </div>
-  `;
+    <div class="card-actions">
+      <label class="btn btn-light" style="text-align:center">📷 Ajouter / modifier ma photo<input id="photo-input" class="hide" type="file" accept="image/*" onchange="televerserPhoto(this.files[0])"></label>
+      <button class="btn btn-secondary" onclick="telechargerCarte()">⬇ Télécharger ma carte</button>
+    </div>`;
+  if (token && window.QRCode) {
+    const url = `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(token)}`;
+    new QRCode(document.getElementById('qrcode'), { text: url, width: 112, height: 112, correctLevel: QRCode.CorrectLevel.H });
+  }
 }
 
-/* =========================
-   DÉCONNEXION
-========================= */
+async function televerserPhoto(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Choisissez une image.'); return; }
+  if (file.size > 5 * 1024 * 1024) { toast('La photo doit faire moins de 5 Mo.'); return; }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${profilActuel.id}/profil-${Date.now()}.${ext}`;
+  toast('Envoi de la photo...');
+  const { error } = await supabaseClient.storage.from('member-photos').upload(path, file, { upsert: true });
+  if (error) { console.error(error); toast("Impossible d'envoyer la photo."); return; }
+  const { data } = supabaseClient.storage.from('member-photos').getPublicUrl(path);
+  const url = data.publicUrl;
+  const { error: e2 } = await supabaseClient.rpc('set_my_photo_url', { p_url: url });
+  if (e2) { console.error(e2); toast("Photo envoyée mais profil non mis à jour."); return; }
+  profilActuel.photo_url = url;
+  toast('Photo mise à jour.');
+  maCarte();
+}
+
+async function telechargerCarte() {
+  const el = document.getElementById('member-card');
+  if (!el || !window.html2canvas || !window.jspdf) return;
+  toast('Préparation de la carte...');
+  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+  const img = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [85.6, 54] });
+  pdf.addImage(img, 'PNG', 0, 0, 85.6, 54);
+  pdf.save(`Carte-${(profilActuel.numero_membre || 'ACVTC-CI').replaceAll('/', '-')}.pdf`);
+}
+
+async function cotisations() {
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="section-title"><h2>Mes cotisations</h2></div><div class="grid"><div class="kpi"><small>Cotisation mensuelle</small><b>500 FCFA</b></div><div class="kpi"><small>Après 2 semaines de retard</small><b>700 FCFA</b></div></div><div id="cotis-list" class="list" style="margin-top:14px"><div class="empty">Chargement...</div></div>`;
+  const { data, error } = await supabaseClient.from('cotisations').select('*').eq('profile_id', profilActuel.id).order('mois', { ascending: false }).limit(12);
+  const z = document.getElementById('cotis-list');
+  if (error || !(data || []).length) { z.innerHTML = '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>'; return; }
+  z.innerHTML = data.map(c => `<div class="list-item"><div><h4>${new Date(c.mois).toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</h4><p>${c.statut === 'paye' ? '✅ Payée' : '⏳ En attente'} · ${c.montant} FCFA</p></div></div>`).join('');
+}
+
+async function membres() {
+  const d = droits();
+  if (!d.admin) return;
+  await chargerReferentiels();
+  const content = document.getElementById('content');
+  const optionsSections = Object.entries(sectionsCache).map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('');
+  const optionsRoles = Object.entries(rolesCache).filter(([,n]) => sansAccent(n) !== 'membre').map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('');
+  content.innerHTML = `
+    <div class="section-title"><h2>Gestion des membres</h2></div>
+    <div class="card"><h3>+ Ajouter un membre simple</h3><p class="note">Tous les administrateurs peuvent enregistrer un membre simple avec son nom complet, son téléphone et sa section.</p><div class="form-grid"><div><label>Nom complet</label><input id="m-nom" placeholder="Ex. Kouassi Jean Marc"></div><div><label>Téléphone</label><input id="m-phone" type="tel" placeholder="07 XX XX XX XX"></div><div><label>Section</label><select id="m-section">${optionsSections}</select></div><div style="display:flex;align-items:end"><button class="btn btn-primary" onclick="ajouterMembreSimple()">Enregistrer le membre</button></div></div></div>
+    ${d.president ? `<div class="card" style="margin-top:14px"><h3>Créer un administrateur</h3><p class="note">Réservé au Président. Le rôle est défini ici et ne peut pas être choisi par l'utilisateur lors de la connexion.</p><div class="form-grid"><div><label>Nom complet</label><input id="a-nom"></div><div><label>Téléphone</label><input id="a-phone" type="tel"></div><div><label>Section</label><select id="a-section">${optionsSections}</select></div><div><label>Rôle</label><select id="a-role">${optionsRoles}</select></div><div class="full"><button class="btn btn-secondary" onclick="ajouterAdministrateur()">Créer l'administrateur</button></div></div></div>` : ''}
+    <div class="section-title"><h3>Liste des membres</h3></div><div id="members-list" class="list"><div class="empty">Chargement...</div></div>`;
+  await chargerListeMembres();
+}
+
+async function ajouterMembreSimple() {
+  const nom = document.getElementById('m-nom')?.value.trim();
+  const phone = normaliserTelephone(document.getElementById('m-phone')?.value);
+  const section = Number(document.getElementById('m-section')?.value);
+  if (!nom || !phone || !section) { toast('Complétez le nom, le téléphone et la section.'); return; }
+  const { error } = await supabaseClient.rpc('admin_create_member', { p_nom_complet: nom, p_phone: phone, p_section_id: section });
+  if (error) { console.error(error); toast(error.message || 'Création impossible.'); return; }
+  toast('Membre enregistré. Il pourra se connecter avec son numéro de téléphone.');
+  document.getElementById('m-nom').value = '';
+  document.getElementById('m-phone').value = '';
+  chargerListeMembres();
+}
+
+async function ajouterAdministrateur() {
+  if (!droits().president) return;
+  const nom = document.getElementById('a-nom')?.value.trim();
+  const phone = normaliserTelephone(document.getElementById('a-phone')?.value);
+  const section = Number(document.getElementById('a-section')?.value);
+  const role = Number(document.getElementById('a-role')?.value);
+  if (!nom || !phone || !section || !role) { toast('Complétez tous les champs.'); return; }
+  const { error } = await supabaseClient.rpc('president_create_admin', { p_nom_complet: nom, p_phone: phone, p_section_id: section, p_role_id: role });
+  if (error) { console.error(error); toast(error.message || 'Création impossible.'); return; }
+  toast('Administrateur enregistré.');
+}
+
+async function chargerListeMembres() {
+  const zone = document.getElementById('members-list');
+  if (!zone) return;
+  const { data, error } = await supabaseClient.rpc('admin_list_members');
+  if (error) { console.error(error); zone.innerHTML = '<div class="empty">Impossible de charger les membres.</div>'; return; }
+  zone.innerHTML = (data || []).length ? data.map(m => `<div class="list-item"><div><h4>${echapperHtml(m.nom_complet || [m.prenoms,m.nom].filter(Boolean).join(' '))}</h4><p>${echapperHtml(m.numero_membre || 'Numéro en attente')} · ${echapperHtml(nomSection(m.section_id))}</p><p>${echapperHtml(m.telephone || m.phone_e164 || '')} · ${echapperHtml(nomRole(m.role_id))}</p></div><span class="badge ${m.actif === false ? 'badge-red' : 'badge-green'}">${m.actif === false ? 'Désactivé' : 'Actif'}</span></div>`).join('') : '<div class="empty">Aucun membre.</div>';
+}
+
+async function messages() {
+  const d = droits();
+  const content = document.getElementById('content');
+  const optionsSections = `<option value="">Tous les conducteurs</option>${Object.entries(sectionsCache).map(([id,n]) => `<option value="${id}">${echapperHtml(n)}</option>`).join('')}`;
+  content.innerHTML = `<div class="section-title"><h2>Messages aux conducteurs</h2></div>${d.admin ? `<div class="card"><h3>Publier un message</h3><div class="form-grid"><div><label>Titre</label><input id="msg-title"></div><div><label>Destinataires</label><select id="msg-section">${optionsSections}</select></div><div class="full"><label>Message</label><textarea id="msg-body"></textarea></div><div><label><input id="msg-important" type="checkbox" style="width:auto"> Message important</label></div><div style="display:flex;align-items:end"><button class="btn btn-primary" onclick="publierMessage()">Publier</button></div></div></div>` : ''}<div class="section-title"><h3>Messages publiés</h3></div><div id="messages-list" class="list"><div class="empty">Chargement...</div></div>`;
+  await chargerMessages();
+}
+
+async function chargerMessages() {
+  const zone = document.getElementById('messages-list');
+  const { data, error } = await supabaseClient.from('messages').select('*').eq('publie', true).order('created_at', { ascending: false }).limit(30);
+  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun message publié.</div>'; return; }
+  const visible = data.filter(m => droits().admin || !m.section_id || Number(m.section_id) === Number(profilActuel.section_id));
+  zone.innerHTML = visible.map(messageHtml).join('');
+}
+
+async function publierMessage() {
+  if (!droits().admin) return;
+  const titre = document.getElementById('msg-title')?.value.trim();
+  const contenu = document.getElementById('msg-body')?.value.trim();
+  const section = document.getElementById('msg-section')?.value;
+  const important = !!document.getElementById('msg-important')?.checked;
+  if (!titre || !contenu) { toast('Ajoutez un titre et un message.'); return; }
+  const { error } = await supabaseClient.from('messages').insert({ titre, contenu, section_id: section ? Number(section) : null, important, publie: true, created_by: profilActuel.id });
+  if (error) { console.error(error); toast('Publication impossible.'); return; }
+  toast('Message publié.');
+  messages();
+}
+
+async function actualites() {
+  const d = droits();
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="section-title"><h2>Actualités VTC – Côte d'Ivoire & Monde</h2></div>${d.admin ? `<div class="card"><h3>Publier une actualité</h3><div class="form-grid"><div><label>Titre</label><input id="news-title"></div><div><label>Pays</label><input id="news-country" placeholder="Côte d'Ivoire, France, Sénégal..."></div><div><label>Catégorie</label><input id="news-cat" placeholder="Réglementation, sécurité, innovation..."></div><div><label>Lien source</label><input id="news-url" type="url" placeholder="https://..."></div><div class="full"><label>Résumé</label><textarea id="news-summary"></textarea></div><div class="full"><button class="btn btn-primary" onclick="publierActualite()">Publier l'actualité</button></div></div></div>` : ''}<div class="section-title"><h3>Fil d'actualités</h3></div><div id="news-list" class="list"><div class="empty">Chargement...</div></div>`;
+  await chargerActualites();
+}
+
+async function chargerActualites() {
+  const zone = document.getElementById('news-list');
+  const { data, error } = await supabaseClient.from('vtc_news').select('*').eq('publie', true).order('published_at', { ascending: false }).limit(50);
+  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucune actualité publiée pour le moment.</div>'; return; }
+  zone.innerHTML = data.map(newsHtml).join('');
+}
+
+async function publierActualite() {
+  if (!droits().admin) return;
+  const titre = document.getElementById('news-title')?.value.trim();
+  const pays = document.getElementById('news-country')?.value.trim();
+  const categorie = document.getElementById('news-cat')?.value.trim();
+  const source_url = document.getElementById('news-url')?.value.trim() || null;
+  const resume = document.getElementById('news-summary')?.value.trim();
+  if (!titre || !resume) { toast('Ajoutez un titre et un résumé.'); return; }
+  const { error } = await supabaseClient.from('vtc_news').insert({ titre, pays, categorie, source_url, resume, publie: true, created_by: profilActuel.id, published_at: new Date().toISOString() });
+  if (error) { console.error(error); toast('Publication impossible.'); return; }
+  toast('Actualité publiée.');
+  actualites();
+}
+
+async function procesVerbaux() {
+  if (!droits().secretariat) return;
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="section-title"><h2>Secrétariat / Procès-verbaux</h2></div><div class="card"><h3>Archiver un PV</h3><div class="form-grid"><div><label>Titre du PV</label><input id="pv-title" placeholder="PV réunion du bureau"></div><div><label>Date de la réunion</label><input id="pv-date" type="date"></div><div><label>Type</label><select id="pv-type"><option>Réunion du bureau</option><option>Assemblée générale</option><option>Réunion de section</option><option>Autre</option></select></div><div><label>Document</label><input id="pv-file" type="file" accept=".pdf,.doc,.docx"></div><div class="full"><label>Résumé</label><textarea id="pv-summary"></textarea></div><div class="full"><button class="btn btn-primary" onclick="archiverPV()">Archiver le PV</button></div></div></div><div class="section-title"><h3>Archives</h3></div><div id="pv-list" class="list"><div class="empty">Chargement...</div></div>`;
+  await chargerPV();
+}
+
+async function archiverPV() {
+  if (!droits().secretariat) return;
+  const titre = document.getElementById('pv-title')?.value.trim();
+  const date = document.getElementById('pv-date')?.value;
+  const type = document.getElementById('pv-type')?.value;
+  const resume = document.getElementById('pv-summary')?.value.trim() || null;
+  const file = document.getElementById('pv-file')?.files?.[0];
+  if (!titre || !date || !file) { toast('Ajoutez le titre, la date et le document.'); return; }
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${new Date().getFullYear()}/${profilActuel.id}/${Date.now()}-${safe}`;
+  toast('Envoi du document...');
+  const { error: e1 } = await supabaseClient.storage.from('pv-files').upload(path, file, { upsert: false });
+  if (e1) { console.error(e1); toast("Impossible d'envoyer le fichier."); return; }
+  const { error: e2 } = await supabaseClient.from('pv_documents').insert({ titre, date_reunion: date, type_pv: type, resume, file_path: path, file_name: file.name, created_by: profilActuel.id });
+  if (e2) { console.error(e2); toast("Fichier envoyé mais archivage impossible."); return; }
+  toast('PV archivé.');
+  procesVerbaux();
+}
+
+async function chargerPV() {
+  const zone = document.getElementById('pv-list');
+  const { data, error } = await supabaseClient.from('pv_documents').select('*').order('date_reunion', { ascending: false }).limit(60);
+  if (error || !(data || []).length) { zone.innerHTML = '<div class="empty">Aucun PV archivé.</div>'; return; }
+  zone.innerHTML = data.map(p => `<div class="list-item"><div><h4>📄 ${echapperHtml(p.titre)}</h4><p>${new Date(p.date_reunion).toLocaleDateString('fr-FR')} · ${echapperHtml(p.type_pv || '')}</p><p>${echapperHtml(p.resume || '')}</p></div><div class="list-actions"><button class="btn btn-light btn-small" onclick="ouvrirPV('${echapperHtml(p.file_path)}')">Ouvrir</button></div></div>`).join('');
+}
+
+async function ouvrirPV(path) {
+  const { data, error } = await supabaseClient.storage.from('pv-files').createSignedUrl(path, 300);
+  if (error || !data?.signedUrl) { toast('Impossible d’ouvrir le document.'); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+async function finances() {
+  if (!droits().finance) return;
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="section-title"><h2>Finances ACVTC-CI</h2></div><div class="grid"><div class="kpi"><small>Module</small><b>Trésorerie</b></div><div class="kpi"><small>Cotisation mensuelle</small><b>500 FCFA</b></div><div class="kpi"><small>Retard</small><b>+200 FCFA</b></div></div><div class="card" style="margin-top:14px"><h3>Suivi financier</h3><p>La V5 conserve l'espace Finances pour le Président et les rôles de Trésorerie. Les opérations détaillées pourront être ajoutées ici sans modifier les autres modules.</p></div>`;
+}
+
+async function afficherVerification(token) {
+  document.getElementById('auth-screen')?.classList.add('hide');
+  document.getElementById('app-shell')?.classList.add('hide');
+  document.getElementById('verify-screen')?.classList.remove('hide');
+  const zone = document.getElementById('verify-content');
+  const { data, error } = await supabaseClient.rpc('verify_member_card', { p_token: token });
+  if (error || !data || !data.length) {
+    zone.innerHTML = '<div class="badge badge-red">Carte non reconnue</div><p>Le QR code est invalide ou la carte n’est plus active.</p>';
+    return;
+  }
+  const m = data[0];
+  zone.innerHTML = `<div class="verify-person">${m.photo_url ? `<img src="${echapperHtml(m.photo_url)}" alt="Photo membre">` : '<div class="photo-placeholder">👤</div>'}<h2>${echapperHtml(m.nom_complet)}</h2><div class="badge ${m.actif ? 'badge-green' : 'badge-red'}">${m.actif ? 'Carte authentique · membre actif' : 'Membre inactif'}</div><p><b>N° membre :</b> ${echapperHtml(m.numero_membre)}</p><p><b>Section :</b> ${echapperHtml(m.section_nom)}</p><p><b>Rôle :</b> ${echapperHtml(m.role_nom)}</p></div>`;
+}
 
 async function logout() {
   await supabaseClient.auth.signOut();
-
   profilActuel = null;
-
-  sessionStorage.removeItem('acvtc_profil');
-
-  window.location.href =
-    `${window.location.origin}${window.location.pathname}`;
+  window.location.href = window.location.pathname;
 }
 
-/* =========================
-   SESSION
-========================= */
-
-async function verifierSession() {
-  const {
-    data: { session }
-  } = await supabaseClient.auth.getSession();
-
-  if (session?.user) {
-    await chargerProfil(session.user);
-    return;
-  }
-
-  profilActuel = null;
-  sessionStorage.removeItem('acvtc_profil');
+async function demarrer() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const params = new URLSearchParams(window.location.search);
+  const verify = params.get('verify');
+  if (verify) { await afficherVerification(verify); return; }
+  await chargerReferentiels();
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session?.user) await chargerProfil(session.user);
 }
 
-/* =========================
-   DÉMARRAGE
-========================= */
-
-async function demarrerApplication() {
-  const params =
-    new URLSearchParams(window.location.search);
-
-  const tokenInvitation =
-    params.get('invite');
-
-  if (tokenInvitation) {
-    await afficherInscriptionInvitation(tokenInvitation);
-    return;
-  }
-
-  await verifierSession();
-}
-
-demarrerApplication();
+demarrer();
