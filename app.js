@@ -1,24 +1,13 @@
 const SUPABASE_URL = 'https://jxunyxingxubryyugwzn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HeE36KA4qTxB3jfo98Uvtg_mQSvG350';
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let profilActuel = null;
 let authUserId = null;
-let schemaMode = 'unknown';
-
-let sectionsCache = {
-  1: 'Abidjan',
-  2: 'Bouaké',
-  3: 'Yamoussoukro'
-};
-
-let rolesCache = {
-  1: 'Président'
-};
+let schemaMode = 'unknown'; // 'v5' ou 'legacy'
+let sectionsCache = { 1: 'Abidjan', 2: 'Bouaké', 3: 'Yamoussoukro' };
+let rolesCache = { 1: 'Président' };
 
 function echapperHtml(v) {
   return String(v ?? '')
@@ -39,27 +28,12 @@ function sansAccent(v) {
 
 function normaliserTelephone(v) {
   let s = String(v || '').replace(/[^0-9+]/g, '');
-
   if (!s) return '';
-
   if (s.startsWith('+225')) return s;
-
-  if (s.startsWith('225')) {
-    return `+${s}`;
-  }
-
-  if (s.startsWith('0') && s.length === 10) {
-    return `+225${s}`;
-  }
-
-  if (/^[0-9]{10}$/.test(s)) {
-    return `+225${s}`;
-  }
-
-  if (s.startsWith('+')) {
-    return s;
-  }
-
+  if (s.startsWith('225')) return `+${s}`;
+  if (s.startsWith('0') && s.length === 10) return `+225${s}`;
+  if (/^[0-9]{10}$/.test(s)) return `+225${s}`;
+  if (s.startsWith('+')) return s;
   return `+225${s}`;
 }
 
@@ -73,94 +47,40 @@ function nomRole(id) {
 
 function nomComplet(p = profilActuel) {
   if (!p) return '';
-
-  return (
-    p.nom_complet ||
-    [p.prenoms, p.nom].filter(Boolean).join(' ') ||
-    'Membre ACVTC-CI'
-  );
+  return p.nom_complet || [p.prenoms, p.nom].filter(Boolean).join(' ') || 'Membre ACVTC-CI';
 }
 
 function droits() {
-  const role = sansAccent(
-    profilActuel?.role_nom ||
-    nomRole(profilActuel?.role_id)
-  );
-
-  const president =
-    profilActuel?.can_manage_admins === true ||
-    role === 'president';
-
+  const role = sansAccent(profilActuel?.role_nom || nomRole(profilActuel?.role_id));
+  const president = profilActuel?.can_manage_admins === true || role === 'president';
   const membre = role === 'membre';
-
-  const admin =
-    profilActuel?.is_admin === true ||
-    (!!profilActuel && !membre);
-
-  const secretariat =
-    profilActuel?.can_manage_minutes === true ||
-    president ||
-    role.includes('secretaire');
-
-  const finance =
-    profilActuel?.can_manage_finances === true ||
-    president ||
-    role.includes('tresor');
-
-  const messages =
-    profilActuel?.can_manage_messages === true ||
-    president ||
-    role.includes('secretaire') ||
-    role.includes('communication');
-
-  const news =
-    profilActuel?.can_manage_news === true ||
-    president ||
-    role.includes('secretaire') ||
-    role.includes('communication');
-
-  return {
-    role,
-    president,
-    membre,
-    admin,
-    secretariat,
-    finance,
-    messages,
-    news
-  };
+  const admin = profilActuel?.is_admin === true || (!!profilActuel && !membre);
+  const secretariat = profilActuel?.can_manage_minutes === true || president || role.includes('secretaire');
+  const finance = profilActuel?.can_manage_finances === true || president || role.includes('tresor');
+  const messages = profilActuel?.can_manage_messages === true || president || role.includes('secretaire') || role.includes('communication');
+  const news = profilActuel?.can_manage_news === true || president || role.includes('secretaire') || role.includes('communication');
+  return { role, president, membre, admin, secretariat, finance, messages, news };
 }
 
 function toast(message, duree = 3200) {
   const el = document.getElementById('toast');
-
   if (!el) return;
-
   el.textContent = message;
   el.classList.remove('hide');
-
   clearTimeout(window.__toastTimer);
-
-  window.__toastTimer = setTimeout(() => {
-    el.classList.add('hide');
-  }, duree);
+  window.__toastTimer = setTimeout(() => el.classList.add('hide'), duree);
 }
 
 function setAuthMessage(message, erreur = false) {
   const el = document.getElementById('auth-message');
-
   if (!el) return;
-
   el.textContent = message;
   el.style.color = erreur ? '#b42318' : '#163F73';
 }
 
 async function chargerReferentiels() {
   try {
-    const [
-      { data: sections, error: e1 },
-      { data: roles, error: e2 }
-    ] = await Promise.all([
+    const [{ data: sections, error: e1 }, { data: roles, error: e2 }] = await Promise.all([
       supabaseClient.rpc('list_sections'),
       supabaseClient.rpc('list_roles')
     ]);
@@ -176,39 +96,27 @@ async function chargerReferentiels() {
         rolesCache[Number(r.id)] = r.nom;
       });
     }
-
   } catch (e) {
-    console.warn(
-      'Référentiels RPC indisponibles',
-      e
-    );
+    console.warn('Référentiels RPC indisponibles', e);
   }
 }
 
 async function envoyerCode() {
-  const phone = normaliserTelephone(
-    document.getElementById('phone')?.value
-  );
+  const phone = normaliserTelephone(document.getElementById('phone')?.value);
 
   if (!phone || phone.length < 13) {
-    setAuthMessage(
-      'Saisissez un numéro ivoirien valide.',
-      true
-    );
+    setAuthMessage('Saisissez un numéro ivoirien valide.', true);
     return;
   }
 
-  setAuthMessage(
-    'Envoi du code en cours...'
-  );
+  setAuthMessage('Envoi du code en cours...');
 
-  const { error } =
-    await supabaseClient.auth.signInWithOtp({
-      phone,
-      options: {
-        shouldCreateUser: true
-      }
-    });
+  const { error } = await supabaseClient.auth.signInWithOtp({
+    phone,
+    options: {
+      shouldCreateUser: true
+    }
+  });
 
   if (error) {
     console.error(error);
@@ -383,7 +291,7 @@ async function essayerProfilLegacy(user) {
       await supabaseClient
         .from('profiles')
         .select(
-          'id, nom, prenoms, nom_complet, telephone, phone_e164, photo_url, section_id, role_id, numero_membre, actif, verification_token'
+          'id, nom, prenoms, telephone, photo_url, section_id, role_id, numero_membre, actif'
         )
         .eq('id', user.id)
         .single();
@@ -396,7 +304,7 @@ async function essayerProfilLegacy(user) {
 
   } catch (e) {
     console.warn(
-      'Profil ancien indisponible',
+      'Profil legacy indisponible',
       e
     );
 
@@ -493,7 +401,9 @@ function afficherApplication() {
   afficherNavigation();
 
   accueil();
-}function afficherNavigation() {
+}
+
+function afficherNavigation() {
   const d = droits();
 
   const nav =
@@ -539,7 +449,6 @@ function afficherApplication() {
       .join('');
 }
 
-
 async function accueil() {
   const content =
     document.getElementById(
@@ -580,11 +489,9 @@ async function accueil() {
 
     </div>
 
-
     <div class="section-title">
       <h2>Mon espace</h2>
     </div>
-
 
     <div class="grid dashboard-grid">
 
@@ -592,76 +499,48 @@ async function accueil() {
         class="quick navy"
         onclick="messages()"
       >
-        <span class="icon">
-          📢
-        </span>
-
-        <b>
-          Messages aux conducteurs
-        </b>
-
+        <span class="icon">📢</span>
+        <b>Messages aux conducteurs</b>
         <small>
           Réunions, convocations
           et informations.
         </small>
       </button>
 
-
       <button
         class="quick red"
         onclick="actualites()"
       >
-        <span class="icon">
-          🌍
-        </span>
-
-        <b>
-          Actualités VTC
-        </b>
-
+        <span class="icon">🌍</span>
+        <b>Actualités VTC</b>
         <small>
           Côte d'Ivoire et monde.
         </small>
       </button>
 
-
       <button
         class="quick"
         onclick="maCarte()"
       >
-        <span class="icon">
-          🪪
-        </span>
-
-        <b>
-          Ma carte
-        </b>
-
+        <span class="icon">🪪</span>
+        <b>Ma carte</b>
         <small>
           Photo et QR
           de vérification.
         </small>
       </button>
 
-
       <button
         class="quick"
         onclick="cotisations()"
       >
-        <span class="icon">
-          💳
-        </span>
-
-        <b>
-          Cotisations
-        </b>
-
+        <span class="icon">💳</span>
+        <b>Cotisations</b>
         <small>
           500 FCFA /
           700 FCFA après retard.
         </small>
       </button>
-
 
       ${
         d.admin
@@ -671,14 +550,8 @@ async function accueil() {
           class="quick"
           onclick="membres()"
         >
-          <span class="icon">
-            👥
-          </span>
-
-          <b>
-            Membres
-          </b>
-
+          <span class="icon">👥</span>
+          <b>Membres</b>
           <small>
             Ajouter et consulter
             les membres.
@@ -689,7 +562,6 @@ async function accueil() {
         ''
       }
 
-
       ${
         d.secretariat
         ?
@@ -698,14 +570,8 @@ async function accueil() {
           class="quick"
           onclick="procesVerbaux()"
         >
-          <span class="icon">
-            📁
-          </span>
-
-          <b>
-            Secrétariat / PV
-          </b>
-
+          <span class="icon">📁</span>
+          <b>Secrétariat / PV</b>
           <small>
             Archivage des
             procès-verbaux.
@@ -716,7 +582,6 @@ async function accueil() {
         ''
       }
 
-
       ${
         d.finance
         ?
@@ -725,14 +590,8 @@ async function accueil() {
           class="quick"
           onclick="finances()"
         >
-          <span class="icon">
-            📊
-          </span>
-
-          <b>
-            Finances
-          </b>
-
+          <span class="icon">📊</span>
+          <b>Finances</b>
           <small>
             Suivi financier
             de l'association.
@@ -745,11 +604,8 @@ async function accueil() {
 
     </div>
 
-
     <div class="section-title">
-      <h2>
-        Informations importantes
-      </h2>
+      <h2>Informations importantes</h2>
     </div>
 
     <div
@@ -761,12 +617,8 @@ async function accueil() {
       </div>
     </div>
 
-
     <div class="section-title">
-
-      <h2>
-        Dernières actualités VTC
-      </h2>
+      <h2>Dernières actualités VTC</h2>
 
       <button
         class="btn btn-light btn-small"
@@ -774,9 +626,7 @@ async function accueil() {
       >
         Voir tout
       </button>
-
     </div>
-
 
     <div
       id="home-news"
@@ -788,13 +638,11 @@ async function accueil() {
     </div>
   `;
 
-
   await Promise.all([
     chargerMessagesAccueil(),
     chargerActualitesAccueil()
   ]);
 }
-
 
 async function chargerMessagesAccueil() {
   const zone =
@@ -803,7 +651,6 @@ async function chargerMessagesAccueil() {
     );
 
   if (!zone) return;
-
 
   if (schemaMode === 'v5') {
 
@@ -814,7 +661,6 @@ async function chargerMessagesAccueil() {
           p_limit: 4
         }
       );
-
 
     if (
       error ||
@@ -827,48 +673,15 @@ async function chargerMessagesAccueil() {
       return;
     }
 
-
     zone.innerHTML =
       data
-        .map(m => `
-          <article class="list-item">
-
-            <div>
-
-              <h4>
-                📢
-                ${echapperHtml(
-                  m.title
-                )}
-              </h4>
-
-              <p>
-                ${echapperHtml(
-                  m.body
-                )}
-              </p>
-
-              <p>
-                ${
-                  m.section_nom
-                  ?
-                  echapperHtml(
-                    m.section_nom
-                  )
-                  :
-                  'Tous les conducteurs'
-                }
-              </p>
-
-            </div>
-
-          </article>
-        `)
+        .map(m =>
+          messageHtmlV5(m)
+        )
         .join('');
 
     return;
   }
-
 
   const { data, error } =
     await supabaseClient
@@ -883,7 +696,6 @@ async function chargerMessagesAccueil() {
       )
       .limit(4);
 
-
   if (
     error ||
     !(data || []).length
@@ -894,7 +706,6 @@ async function chargerMessagesAccueil() {
 
     return;
   }
-
 
   const filtered =
     data.filter(
@@ -908,20 +719,17 @@ async function chargerMessagesAccueil() {
         )
     );
 
-
   zone.innerHTML =
     filtered.length
     ?
     filtered
-      .map(
-        m =>
-          messageHtml(m)
+      .map(m =>
+        messageHtmlLegacy(m)
       )
       .join('')
     :
     '<div class="empty">Aucun message pour votre section.</div>';
 }
-
 
 async function chargerActualitesAccueil() {
   const zone =
@@ -930,7 +738,6 @@ async function chargerActualitesAccueil() {
     );
 
   if (!zone) return;
-
 
   if (schemaMode === 'v5') {
 
@@ -950,7 +757,6 @@ async function chargerActualitesAccueil() {
         )
         .limit(3);
 
-
     if (
       error ||
       !(data || []).length
@@ -962,7 +768,6 @@ async function chargerActualitesAccueil() {
       return;
     }
 
-
     zone.innerHTML =
       data
         .map(n =>
@@ -972,7 +777,6 @@ async function chargerActualitesAccueil() {
 
     return;
   }
-
 
   const { data, error } =
     await supabaseClient
@@ -990,7 +794,6 @@ async function chargerActualitesAccueil() {
       )
       .limit(3);
 
-
   if (
     error ||
     !(data || []).length
@@ -1002,23 +805,47 @@ async function chargerActualitesAccueil() {
     return;
   }
 
-
   zone.innerHTML =
     data
-      .map(
-        n =>
-          newsHtml(n)
+      .map(n =>
+        newsHtmlLegacy(n)
       )
       .join('');
 }
 
-
-function messageHtml(m) {
+function messageHtmlV5(m) {
   return `
     <article class="list-item">
-
       <div>
+        <h4>
+          📢 ${echapperHtml(m.title)}
+        </h4>
 
+        <p>
+          ${echapperHtml(m.body)}
+        </p>
+
+        <p>
+          ${
+            m.section_id
+            ?
+            echapperHtml(
+              m.section_nom ||
+              nomSection(m.section_id)
+            )
+            :
+            'Tous les conducteurs'
+          }
+        </p>
+      </div>
+    </article>
+  `;
+}
+
+function messageHtmlLegacy(m) {
+  return `
+    <article class="list-item">
+      <div>
         <h4>
           ${
             m.important
@@ -1027,16 +854,11 @@ function messageHtml(m) {
             :
             '📢 '
           }
-
-          ${echapperHtml(
-            m.titre
-          )}
+          ${echapperHtml(m.titre)}
         </h4>
 
         <p>
-          ${echapperHtml(
-            m.contenu
-          )}
+          ${echapperHtml(m.contenu)}
         </p>
 
         <p>
@@ -1044,83 +866,16 @@ function messageHtml(m) {
             m.section_id
             ?
             echapperHtml(
-              nomSection(
-                m.section_id
-              )
+              nomSection(m.section_id)
             )
             :
             'Tous les conducteurs'
           }
         </p>
-
       </div>
-
     </article>
   `;
 }
-
-
-function newsHtml(n) {
-  const lien =
-    n.source_url
-    ?
-    `
-      <a
-        class="news-source"
-        href="${echapperHtml(
-          n.source_url
-        )}"
-        target="_blank"
-        rel="noopener"
-      >
-        Voir la source ↗
-      </a>
-    `
-    :
-    '';
-
-
-  return `
-    <article class="list-item">
-
-      <div>
-
-        <h4>
-          🌍
-          ${echapperHtml(
-            n.titre
-          )}
-        </h4>
-
-        <p>
-          <b>
-            ${echapperHtml(
-              n.pays ||
-              'International'
-            )}
-          </b>
-          ·
-          ${echapperHtml(
-            n.categorie ||
-            'Actualité VTC'
-          )}
-        </p>
-
-        <p>
-          ${echapperHtml(
-            n.resume ||
-            ''
-          )}
-        </p>
-
-        ${lien}
-
-      </div>
-
-    </article>
-  `;
-}
-
 
 function newsHtmlV5(n) {
   const lien =
@@ -1129,9 +884,7 @@ function newsHtmlV5(n) {
     `
       <a
         class="news-source"
-        href="${echapperHtml(
-          n.source_url
-        )}"
+        href="${echapperHtml(n.source_url)}"
         target="_blank"
         rel="noopener"
       >
@@ -1141,17 +894,12 @@ function newsHtmlV5(n) {
     :
     '';
 
-
   return `
     <article class="list-item">
-
       <div>
 
         <h4>
-          🌍
-          ${echapperHtml(
-            n.title
-          )}
+          🌍 ${echapperHtml(n.title)}
         </h4>
 
         <p>
@@ -1178,19 +926,68 @@ function newsHtmlV5(n) {
         ${lien}
 
       </div>
-
     </article>
   `;
 }
 
+function newsHtmlLegacy(n) {
+  const lien =
+    n.source_url
+    ?
+    `
+      <a
+        class="news-source"
+        href="${echapperHtml(n.source_url)}"
+        target="_blank"
+        rel="noopener"
+      >
+        Voir la source ↗
+      </a>
+    `
+    :
+    '';
+
+  return `
+    <article class="list-item">
+      <div>
+
+        <h4>
+          🌍 ${echapperHtml(n.titre)}
+        </h4>
+
+        <p>
+          <b>
+            ${echapperHtml(
+              n.pays ||
+              'International'
+            )}
+          </b>
+          ·
+          ${echapperHtml(
+            n.categorie ||
+            'Actualité VTC'
+          )}
+        </p>
+
+        <p>
+          ${echapperHtml(
+            n.resume ||
+            ''
+          )}
+        </p>
+
+        ${lien}
+
+      </div>
+    </article>
+  `;
+}
 
 async function maCarte() {
-
   const content =
     document.getElementById(
       'content'
     );
-
 
   const photo =
     profilActuel.photo_url
@@ -1211,20 +1008,14 @@ async function maCarte() {
       </div>
     `;
 
-
   const token =
     profilActuel.verification_token ||
     '';
 
-
   content.innerHTML = `
-
     <div class="section-title">
-      <h2>
-        Ma carte de membre
-      </h2>
+      <h2>Ma carte de membre</h2>
     </div>
-
 
     <div
       id="member-card"
@@ -1232,34 +1023,27 @@ async function maCarte() {
     >
 
       <div class="member-card-head">
-
         <img
           src="/logo-acvtc.png"
           alt="ACVTC-CI"
         >
 
         <div>
-
           <b>
-            ASSOCIATION DES CONDUCTEURS
-            DE VÉHICULES DE TRANSPORT
-            AVEC CHAUFFEUR DE CÔTE D'IVOIRE
+            ASSOCIATION DES CHAUFFEURS
+            DE VTC CÔTE D'IVOIRE
           </b>
 
           <div class="note">
             On travaille aujourd'hui
             pour le bonheur de demain.
           </div>
-
         </div>
-
       </div>
-
 
       <div class="member-card-body">
 
         <div>
-
           ${photo}
 
           <div
@@ -1267,12 +1051,9 @@ async function maCarte() {
             class="qrbox"
             style="margin-top:10px"
           ></div>
-
         </div>
 
-
         <div>
-
           <h2>
             ${echapperHtml(
               nomComplet()
@@ -1299,7 +1080,6 @@ async function maCarte() {
 
           <p>
             <b>Statut :</b>
-
             <span class="badge badge-green">
               Actif
             </span>
@@ -1320,27 +1100,19 @@ async function maCarte() {
             pour vérifier l'authenticité
             de la carte.
           </p>
-
         </div>
 
       </div>
 
-
       <div class="member-card-foot">
-
-        <b>
-          ACVTC-CI
-        </b>
-
+        <b>ACVTC-CI</b>
         <span>
           Plus qu'une association,
           une grande famille.
         </span>
-
       </div>
 
     </div>
-
 
     <div class="card-actions">
 
@@ -1348,7 +1120,6 @@ async function maCarte() {
         class="btn btn-light"
         style="text-align:center"
       >
-
         📷 Ajouter / modifier ma photo
 
         <input
@@ -1358,9 +1129,7 @@ async function maCarte() {
           accept="image/*"
           onchange="televerserPhoto(this.files[0])"
         >
-
       </label>
-
 
       <button
         class="btn btn-secondary"
@@ -1372,7 +1141,6 @@ async function maCarte() {
     </div>
   `;
 
-
   if (
     token &&
     window.QRCode
@@ -1380,7 +1148,6 @@ async function maCarte() {
 
     const url =
       `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(token)}`;
-
 
     new QRCode(
       document.getElementById(
@@ -1397,11 +1164,8 @@ async function maCarte() {
   }
 }
 
-
 async function televerserPhoto(file) {
-
   if (!file) return;
-
 
   if (
     !file.type.startsWith(
@@ -1416,7 +1180,6 @@ async function televerserPhoto(file) {
     return;
   }
 
-
   if (
     file.size >
     5 * 1024 * 1024
@@ -1429,7 +1192,6 @@ async function televerserPhoto(file) {
     return;
   }
 
-
   const ext =
     (
       file.name
@@ -1439,20 +1201,16 @@ async function televerserPhoto(file) {
     )
     .toLowerCase();
 
-
-  const folderId =
+  const dossier =
     authUserId ||
     profilActuel.id;
 
-
   const path =
-    `${folderId}/profil-${Date.now()}.${ext}`;
-
+    `${dossier}/profil-${Date.now()}.${ext}`;
 
   toast(
     'Envoi de la photo...'
   );
-
 
   const { error } =
     await supabaseClient
@@ -1468,7 +1226,6 @@ async function televerserPhoto(file) {
         }
       );
 
-
   if (error) {
 
     console.error(error);
@@ -1480,7 +1237,6 @@ async function televerserPhoto(file) {
     return;
   }
 
-
   const { data } =
     supabaseClient
       .storage
@@ -1489,13 +1245,10 @@ async function televerserPhoto(file) {
       )
       .getPublicUrl(path);
 
-
   const url =
     data.publicUrl;
 
-
   let e2 = null;
-
 
   if (
     schemaMode === 'v5'
@@ -1524,7 +1277,6 @@ async function televerserPhoto(file) {
     e2 = rep.error;
   }
 
-
   if (e2) {
 
     console.error(e2);
@@ -1536,42 +1288,33 @@ async function televerserPhoto(file) {
     return;
   }
 
-
   profilActuel.photo_url =
     url;
-
 
   toast(
     'Photo mise à jour.'
   );
 
-
   maCarte();
 }
 
-
 async function telechargerCarte() {
-
   const el =
     document.getElementById(
       'member-card'
     );
-
 
   if (
     !el ||
     !window.html2canvas ||
     !window.jspdf
   ) {
-
     return;
   }
-
 
   toast(
     'Préparation de la carte...'
   );
-
 
   const canvas =
     await html2canvas(
@@ -1584,16 +1327,13 @@ async function telechargerCarte() {
       }
     );
 
-
   const img =
     canvas.toDataURL(
       'image/png'
     );
 
-
   const { jsPDF } =
     window.jspdf;
-
 
   const pdf =
     new jsPDF({
@@ -1605,7 +1345,6 @@ async function telechargerCarte() {
       ]
     });
 
-
   pdf.addImage(
     img,
     'PNG',
@@ -1614,7 +1353,6 @@ async function telechargerCarte() {
     85.6,
     54
   );
-
 
   pdf.save(
     `Carte-${(
@@ -1625,9 +1363,64 @@ async function telechargerCarte() {
       '-'
     )}.pdf`
   );
-}async function cotisations() {
+}
+
+async function cotisations() {
   const content =
-    document.getElementById('content');
+    document.getElementById(
+      'content'
+    );
+
+  const today =
+    new Date();
+
+  const period =
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    );
+
+  const periodIso =
+    period
+      .toISOString()
+      .slice(0, 10);
+
+  let due = {
+    base_amount: 500,
+    penalty: 0,
+    total_amount: 500,
+    grace_end: null
+  };
+
+  if (
+    schemaMode === 'v5'
+  ) {
+
+    const { data } =
+      await supabaseClient.rpc(
+        'monthly_due_v5',
+        {
+          p_period:
+            periodIso,
+          p_as_of:
+            new Date()
+              .toISOString()
+              .slice(0, 10)
+        }
+      );
+
+    const row =
+      Array.isArray(data)
+        ?
+        data[0]
+        :
+        data;
+
+    if (row) {
+      due = row;
+    }
+  }
 
   content.innerHTML = `
     <div class="section-title">
@@ -1635,31 +1428,112 @@ async function telechargerCarte() {
     </div>
 
     <div class="grid">
+
       <div class="kpi">
-        <small>Cotisation mensuelle</small>
-        <b>500 FCFA</b>
+        <small>Cotisation du mois</small>
+        <b>
+          ${Number(
+            due.total_amount ||
+            500
+          )} FCFA
+        </b>
       </div>
 
       <div class="kpi">
-        <small>Après 2 semaines de retard</small>
-        <b>700 FCFA</b>
+        <small>Règle</small>
+        <b>
+          500 + 200 FCFA
+          après 2 semaines
+        </b>
       </div>
+
     </div>
 
-    <div class="card" style="margin-top:14px">
-      <h3>Moyens de paiement</h3>
+    ${
+      schemaMode === 'v5'
+      ?
+      `
+        <div
+          class="card"
+          style="margin-top:14px"
+        >
 
-      <p>
-        <b>Wave</b> ou
-        <b>Orange Money</b>
-      </p>
+          <h3>
+            PAYER MA COTISATION
+          </h3>
 
-      <p class="note">
-        Après le paiement, la confirmation définitive
-        est effectuée uniquement par le Président
-        ou la Trésorerie.
-      </p>
-    </div>
+          <p>
+            Effectuez votre transfert par
+            <b>Wave</b>
+            ou
+            <b>Orange Money</b>
+            sur le numéro officiel
+            de l'association.
+          </p>
+
+          <div class="form-grid">
+
+            <div>
+              <label>
+                Moyen de paiement
+              </label>
+
+              <select id="pay-method">
+                <option value="WAVE">
+                  Wave
+                </option>
+
+                <option value="ORANGE_MONEY">
+                  Orange Money
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label>
+                Référence de transaction
+              </label>
+
+              <input
+                id="pay-reference"
+                placeholder="Référence reçue après le transfert"
+              >
+            </div>
+
+            <div class="full">
+              <button
+                class="btn btn-primary"
+                onclick="declarerPaiement('${periodIso}')"
+              >
+                J'ai effectué le paiement
+              </button>
+            </div>
+
+          </div>
+
+          <p class="note">
+            Votre paiement restera
+            <b>EN ATTENTE</b>
+            jusqu'à confirmation
+            par le Président
+            ou la Trésorerie.
+          </p>
+
+        </div>
+      `
+      :
+      `
+        <div
+          class="card"
+          style="margin-top:14px"
+        >
+          <p class="note">
+            Ancien module de cotisation
+            en consultation.
+          </p>
+        </div>
+      `
+    }
 
     <div
       id="cotis-list"
@@ -1672,126 +1546,226 @@ async function telechargerCarte() {
     </div>
   `;
 
-  const zone =
+  const z =
     document.getElementById(
       'cotis-list'
     );
 
-  if (schemaMode === 'v5') {
+  if (
+    schemaMode === 'v5'
+  ) {
 
-    const { data, error } =
-      await supabaseClient
-        .from('contributions_v5')
-        .select('*')
-        .eq(
-          'member_id',
-          profilActuel.id
-        )
-        .order(
-          'period',
-          {
-            ascending: false
-          }
-        )
-        .limit(12);
+    const [
+      {
+        data: confirmed,
+        error: e1
+      },
+      {
+        data: declared,
+        error: e2
+      }
+    ] =
+      await Promise.all([
+        supabaseClient
+          .from(
+            'contributions_v5'
+          )
+          .select('*')
+          .eq(
+            'member_id',
+            profilActuel.id
+          )
+          .order(
+            'period',
+            {
+              ascending: false
+            }
+          )
+          .limit(12),
+
+        supabaseClient
+          .from(
+            'payment_declarations_v5'
+          )
+          .select('*')
+          .eq(
+            'member_id',
+            profilActuel.id
+          )
+          .order(
+            'period',
+            {
+              ascending: false
+            }
+          )
+          .limit(12)
+      ]);
 
     if (
-      error ||
-      !(data || []).length
+      e1 ||
+      e2
     ) {
-      zone.innerHTML =
+
+      z.innerHTML =
+        '<div class="empty">Impossible de charger vos cotisations.</div>';
+
+      return;
+    }
+
+    const byPeriod =
+      new Map();
+
+    (declared || [])
+      .forEach(d =>
+        byPeriod.set(
+          d.period,
+          {
+            ...d,
+            source:
+              'declared'
+          }
+        )
+      );
+
+    (confirmed || [])
+      .forEach(c =>
+        byPeriod.set(
+          c.period,
+          {
+            ...c,
+            source:
+              'confirmed'
+          }
+        )
+      );
+
+    const rows =
+      [...byPeriod.values()]
+        .sort(
+          (a, b) =>
+            String(
+              b.period
+            )
+            .localeCompare(
+              String(
+                a.period
+              )
+            )
+        );
+
+    if (!rows.length) {
+
+      z.innerHTML =
         '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>';
 
       return;
     }
 
-    zone.innerHTML =
-      data.map(c => {
+    z.innerHTML =
+      rows
+        .map(c => {
 
-        const total =
-          Number(c.amount || 0) +
-          Number(c.penalty || 0);
+          const total =
+            c.total_amount ??
+            (
+              Number(
+                c.amount ||
+                0
+              )
+              +
+              Number(
+                c.penalty ||
+                0
+              )
+            );
 
-        const statut =
-          sansAccent(
-            c.status || ''
-          );
+          const st =
+            String(
+              c.status ||
+              ''
+            )
+            .toUpperCase();
 
-        let texteStatut =
-          '⏳ En attente';
+          const label =
+            st === 'CONFIRMED'
+            ||
+            sansAccent(
+              c.status
+            ) === 'paye'
+            ?
+            '✅ Payée'
+            :
+            st === 'REJECTED'
+            ?
+            '❌ Rejetée'
+            :
+            '⏳ En attente';
 
-        if (
-          statut === 'paye' ||
-          statut === 'payee'
-        ) {
-          texteStatut =
-            '✅ Payée';
-        }
+          return `
+            <div class="list-item">
+              <div>
 
-        if (
-          statut === 'rejete' ||
-          statut === 'rejetee'
-        ) {
-          texteStatut =
-            '❌ Rejetée';
-        }
+                <h4>
+                  ${
+                    new Date(
+                      c.period
+                    )
+                    .toLocaleDateString(
+                      'fr-FR',
+                      {
+                        month:
+                          'long',
+                        year:
+                          'numeric'
+                      }
+                    )
+                  }
+                </h4>
 
-        return `
-          <div class="list-item">
+                <p>
+                  ${label}
+                  ·
+                  ${total}
+                  FCFA
+                </p>
 
-            <div>
+                <p>
+                  ${echapperHtml(
+                    c.payment_method ||
+                    ''
+                  )}
+                </p>
 
-              <h4>
                 ${
-                  new Date(
-                    c.period
-                  ).toLocaleDateString(
-                    'fr-FR',
-                    {
-                      month: 'long',
-                      year: 'numeric'
-                    }
-                  )
+                  c.transaction_reference
+                  ?
+                  `
+                    <p>
+                      Réf. :
+                      ${echapperHtml(
+                        c.transaction_reference
+                      )}
+                    </p>
+                  `
+                  :
+                  ''
                 }
-              </h4>
 
-              <p>
-                ${texteStatut}
-                ·
-                ${total} FCFA
-              </p>
-
-              ${
-                c.payment_method
-                ?
-                `
-                  <p>
-                    Moyen :
-                    ${echapperHtml(
-                      c.payment_method
-                    )}
-                  </p>
-                `
-                :
-                ''
-              }
-
+              </div>
             </div>
-
-          </div>
-        `;
-      }).join('');
+          `;
+        })
+        .join('');
 
     return;
   }
-
 
   const { data, error } =
     await supabaseClient
       .from('cotisations')
       .select('*')
       .eq(
-        'profile_id',
+        'membre_id',
         profilActuel.id
       )
       .order(
@@ -1802,41 +1776,35 @@ async function telechargerCarte() {
       )
       .limit(12);
 
-
   if (
     error ||
     !(data || []).length
   ) {
 
-    zone.innerHTML =
+    z.innerHTML =
       '<div class="empty">Aucune cotisation enregistrée pour le moment.</div>';
 
     return;
   }
 
-
-  zone.innerHTML =
-    data.map(c => {
-
-      const paye =
-        sansAccent(
-          c.statut
-        ) === 'paye';
-
-      return `
+  z.innerHTML =
+    data
+      .map(c => `
         <div class="list-item">
-
           <div>
 
             <h4>
               ${
                 new Date(
                   c.mois
-                ).toLocaleDateString(
+                )
+                .toLocaleDateString(
                   'fr-FR',
                   {
-                    month: 'long',
-                    year: 'numeric'
+                    month:
+                      'long',
+                    year:
+                      'numeric'
                   }
                 )
               }
@@ -1844,26 +1812,98 @@ async function telechargerCarte() {
 
             <p>
               ${
-                paye
+                sansAccent(
+                  c.statut
+                ) === 'payee'
+                ||
+                sansAccent(
+                  c.statut
+                ) === 'paye'
                 ?
                 '✅ Payée'
                 :
                 '⏳ En attente'
               }
+
               ·
-              ${c.montant} FCFA
+              ${c.montant_total}
+              FCFA
             </p>
 
           </div>
-
         </div>
-      `;
-    }).join('');
+      `)
+      .join('');
 }
 
+async function declarerPaiement(
+  periodIso
+) {
+  if (
+    schemaMode !== 'v5'
+  ) {
+    return;
+  }
+
+  const method =
+    document
+      .getElementById(
+        'pay-method'
+      )
+      ?.value;
+
+  const reference =
+    document
+      .getElementById(
+        'pay-reference'
+      )
+      ?.value
+      .trim();
+
+  if (!reference) {
+
+    toast(
+      'Ajoutez la référence de transaction.'
+    );
+
+    return;
+  }
+
+  const { error } =
+    await supabaseClient.rpc(
+      'declare_payment_v5',
+      {
+        p_period:
+          periodIso,
+
+        p_payment_method:
+          method,
+
+        p_transaction_reference:
+          reference
+      }
+    );
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      error.message ||
+      'Déclaration impossible.'
+    );
+
+    return;
+  }
+
+  toast(
+    'Paiement déclaré. Il est maintenant en attente de validation.'
+  );
+
+  await cotisations();
+}
 
 async function membres() {
-
   const d =
     droits();
 
@@ -1873,12 +1913,10 @@ async function membres() {
 
   await chargerReferentiels();
 
-
   const content =
     document.getElementById(
       'content'
     );
-
 
   const optionsSections =
     Object.entries(
@@ -1894,12 +1932,11 @@ async function membres() {
     )
     .join('');
 
-
   let optionsRoles = '';
 
-
   if (
-    schemaMode === 'v5' &&
+    schemaMode === 'v5'
+    &&
     d.president
   ) {
 
@@ -1907,7 +1944,6 @@ async function membres() {
       await supabaseClient.rpc(
         'list_admin_roles_v5'
       );
-
 
     optionsRoles =
       (data || [])
@@ -1936,7 +1972,8 @@ async function membres() {
             sansAccent(nom);
 
           return (
-            r !== 'membre' &&
+            r !== 'membre'
+            &&
             r !== 'president'
           );
         }
@@ -1952,15 +1989,12 @@ async function membres() {
       .join('');
   }
 
-
   content.innerHTML = `
-
     <div class="section-title">
       <h2>
         Gestion des membres
       </h2>
     </div>
-
 
     <div class="card">
 
@@ -1971,14 +2005,11 @@ async function membres() {
       <p class="note">
         Tous les administrateurs peuvent
         enregistrer un membre simple.
-        Le rôle Membre est attribué automatiquement.
       </p>
-
 
       <div class="form-grid">
 
         <div>
-
           <label>
             Nom complet
           </label>
@@ -1987,12 +2018,9 @@ async function membres() {
             id="m-nom"
             placeholder="Ex. Kouassi Jean Marc"
           >
-
         </div>
 
-
         <div>
-
           <label>
             Téléphone
           </label>
@@ -2002,12 +2030,9 @@ async function membres() {
             type="tel"
             placeholder="07 XX XX XX XX"
           >
-
         </div>
 
-
         <div>
-
           <label>
             Section
           </label>
@@ -2015,9 +2040,7 @@ async function membres() {
           <select id="m-section">
             ${optionsSections}
           </select>
-
         </div>
-
 
         <div
           style="
@@ -2025,20 +2048,16 @@ async function membres() {
             align-items:end
           "
         >
-
           <button
             class="btn btn-primary"
             onclick="ajouterMembreSimple()"
           >
             Enregistrer le membre
           </button>
-
         </div>
 
       </div>
-
     </div>
-
 
     ${
       d.president
@@ -2054,83 +2073,61 @@ async function membres() {
           </h3>
 
           <p class="note">
-            Cette fonction est réservée
-            au Président.
+            Réservé au Président.
           </p>
-
 
           <div class="form-grid">
 
             <div>
-
               <label>
                 Nom complet
               </label>
-
               <input id="a-nom">
-
             </div>
 
-
             <div>
-
               <label>
                 Téléphone
               </label>
-
               <input
                 id="a-phone"
                 type="tel"
               >
-
             </div>
 
-
             <div>
-
               <label>
                 Section
               </label>
-
               <select id="a-section">
                 ${optionsSections}
               </select>
-
             </div>
 
-
             <div>
-
               <label>
                 Rôle
               </label>
-
               <select id="a-role">
                 ${optionsRoles}
               </select>
-
             </div>
 
-
             <div class="full">
-
               <button
                 class="btn btn-secondary"
                 onclick="ajouterAdministrateur()"
               >
                 Créer l'administrateur
               </button>
-
             </div>
 
           </div>
-
         </div>
       `
       :
       ''
     }
-
 
     <div class="section-title">
       <h3>
@@ -2138,26 +2135,20 @@ async function membres() {
       </h3>
     </div>
 
-
     <div
       id="members-list"
       class="list"
     >
-
       <div class="empty">
         Chargement...
       </div>
-
     </div>
   `;
-
 
   await chargerListeMembres();
 }
 
-
 async function ajouterMembreSimple() {
-
   const nom =
     document
       .getElementById(
@@ -2165,7 +2156,6 @@ async function ajouterMembreSimple() {
       )
       ?.value
       .trim();
-
 
   const phone =
     normaliserTelephone(
@@ -2176,7 +2166,6 @@ async function ajouterMembreSimple() {
         ?.value
     );
 
-
   const section =
     Number(
       document
@@ -2185,7 +2174,6 @@ async function ajouterMembreSimple() {
         )
         ?.value
     );
-
 
   if (
     !nom ||
@@ -2200,25 +2188,24 @@ async function ajouterMembreSimple() {
     return;
   }
 
-
-  const fonction =
+  const fn =
     schemaMode === 'v5'
-      ?
-      'admin_create_member_v5'
-      :
-      'admin_create_member';
+    ?
+    'admin_create_member_v5'
+    :
+    'admin_create_member';
 
+  const params = {
+    p_nom_complet: nom,
+    p_phone: phone,
+    p_section_id: section
+  };
 
   const { data, error } =
     await supabaseClient.rpc(
-      fonction,
-      {
-        p_nom_complet: nom,
-        p_phone: phone,
-        p_section_id: section
-      }
+      fn,
+      params
     );
-
 
   if (error) {
 
@@ -2232,15 +2219,13 @@ async function ajouterMembreSimple() {
     return;
   }
 
-
   toast(
     data
-      ?
-      `Membre enregistré : ${data}`
-      :
-      'Membre enregistré.'
+    ?
+    `Membre enregistré : ${data}`
+    :
+    'Membre enregistré.'
   );
-
 
   document
     .getElementById(
@@ -2248,26 +2233,21 @@ async function ajouterMembreSimple() {
     )
     .value = '';
 
-
   document
     .getElementById(
       'm-phone'
     )
     .value = '';
 
-
-  await chargerListeMembres();
+  chargerListeMembres();
 }
 
-
 async function ajouterAdministrateur() {
-
   if (
     !droits().president
   ) {
     return;
   }
-
 
   const nom =
     document
@@ -2276,7 +2256,6 @@ async function ajouterAdministrateur() {
       )
       ?.value
       .trim();
-
 
   const phone =
     normaliserTelephone(
@@ -2287,7 +2266,6 @@ async function ajouterAdministrateur() {
         ?.value
     );
 
-
   const section =
     Number(
       document
@@ -2297,7 +2275,6 @@ async function ajouterAdministrateur() {
         ?.value
     );
 
-
   const role =
     Number(
       document
@@ -2306,7 +2283,6 @@ async function ajouterAdministrateur() {
         )
         ?.value
     );
-
 
   if (
     !nom ||
@@ -2322,26 +2298,27 @@ async function ajouterAdministrateur() {
     return;
   }
 
-
-  const fonction =
+  const fn =
     schemaMode === 'v5'
-      ?
-      'president_create_admin_v5'
-      :
-      'president_create_admin';
-
+    ?
+    'president_create_admin_v5'
+    :
+    'president_create_admin';
 
   const { data, error } =
     await supabaseClient.rpc(
-      fonction,
+      fn,
       {
-        p_nom_complet: nom,
-        p_phone: phone,
-        p_section_id: section,
-        p_role_id: role
+        p_nom_complet:
+          nom,
+        p_phone:
+          phone,
+        p_section_id:
+          section,
+        p_role_id:
+          role
       }
     );
-
 
   if (error) {
 
@@ -2355,22 +2332,18 @@ async function ajouterAdministrateur() {
     return;
   }
 
-
   toast(
     data
-      ?
-      `Administrateur enregistré : ${data}`
-      :
-      'Administrateur enregistré.'
+    ?
+    `Administrateur enregistré : ${data}`
+    :
+    'Administrateur enregistré.'
   );
 
-
-  await chargerListeMembres();
+  chargerListeMembres();
 }
 
-
 async function chargerListeMembres() {
-
   const zone =
     document.getElementById(
       'members-list'
@@ -2380,20 +2353,17 @@ async function chargerListeMembres() {
     return;
   }
 
-
-  const fonction =
+  const fn =
     schemaMode === 'v5'
-      ?
-      'list_members_v5'
-      :
-      'admin_list_members';
-
+    ?
+    'list_members_v5'
+    :
+    'admin_list_members';
 
   const { data, error } =
     await supabaseClient.rpc(
-      fonction
+      fn
     );
-
 
   if (error) {
 
@@ -2405,103 +2375,84 @@ async function chargerListeMembres() {
     return;
   }
 
-
-  if (!(data || []).length) {
-
-    zone.innerHTML =
-      '<div class="empty">Aucun membre enregistré.</div>';
-
-    return;
-  }
-
-
   zone.innerHTML =
+    (data || []).length
+    ?
     data
-      .map(m => {
+      .map(m => `
+        <div class="list-item">
 
-        const nom =
-          m.nom_complet ||
-          [
-            m.prenoms,
-            m.nom
-          ]
-          .filter(Boolean)
-          .join(' ');
+          <div>
+            <h4>
+              ${echapperHtml(
+                m.nom_complet ||
+                [
+                  m.prenoms,
+                  m.nom
+                ]
+                .filter(Boolean)
+                .join(' ')
+              )}
+            </h4>
 
+            <p>
+              ${echapperHtml(
+                m.numero_membre ||
+                'Numéro en attente'
+              )}
+              ·
+              ${echapperHtml(
+                m.section_nom ||
+                nomSection(
+                  m.section_id
+                )
+              )}
+            </p>
 
-        const section =
-          m.section_nom ||
-          nomSection(
-            m.section_id
-          );
-
-
-        const role =
-          m.role_nom ||
-          nomRole(
-            m.role_id
-          );
-
-
-        const telephone =
-          m.telephone ||
-          m.phone_e164 ||
-          '';
-
-
-        return `
-          <div class="list-item">
-
-            <div>
-
-              <h4>
-                ${echapperHtml(nom)}
-              </h4>
-
-              <p>
-                ${echapperHtml(
-                  m.numero_membre ||
-                  'Numéro en attente'
-                )}
-                ·
-                ${echapperHtml(section)}
-              </p>
-
-              <p>
-                ${echapperHtml(telephone)}
-                ·
-                ${echapperHtml(role)}
-              </p>
-
-            </div>
-
-
-            <span
-              class="badge ${
-                m.actif === false
-                ?
-                'badge-red'
-                :
-                'badge-green'
-              }"
-            >
-
-              ${
-                m.actif === false
-                ?
-                'Désactivé'
-                :
-                'Actif'
-              }
-
-            </span>
-
+            <p>
+              ${echapperHtml(
+                m.telephone ||
+                m.phone_e164 ||
+                ''
+              )}
+              ·
+              ${echapperHtml(
+                m.role_nom ||
+                nomRole(
+                  m.role_id
+                )
+              )}
+            </p>
           </div>
-        `;
-      })
-      .join('');
-}async function messages() {
-  const d = droits();
+
+          <span
+            class="badge ${
+              m.actif === false
+              ?
+              'badge-red'
+              :
+              'badge-green'
+            }"
+          >
+            ${
+              m.actif === false
+              ?
+              'Désactivé'
+              :
+              'Actif'
+            }
+          </span>
+
+        </div>
+      `)
+      .join('')
+    :
+    '<div class="empty">Aucun membre.</div>';
+}
+
+async function messages() {
+  const d =
+    droits();
 
   const content =
     document.getElementById(
@@ -2512,6 +2463,7 @@ async function chargerListeMembres() {
     <option value="">
       Tous les conducteurs
     </option>
+
     ${
       Object.entries(
         sectionsCache
@@ -2528,15 +2480,12 @@ async function chargerListeMembres() {
     }
   `;
 
-
   content.innerHTML = `
-
     <div class="section-title">
       <h2>
         Messages aux conducteurs
       </h2>
     </div>
-
 
     ${
       d.messages
@@ -2548,22 +2497,16 @@ async function chargerListeMembres() {
             Publier un message
           </h3>
 
-
           <div class="form-grid">
 
             <div>
-
               <label>
                 Titre
               </label>
-
               <input id="msg-title">
-
             </div>
 
-
             <div>
-
               <label>
                 Destinataires
               </label>
@@ -2571,40 +2514,35 @@ async function chargerListeMembres() {
               <select id="msg-section">
                 ${optionsSections}
               </select>
-
             </div>
 
-
             <div class="full">
-
               <label>
                 Message
               </label>
-
               <textarea id="msg-body"></textarea>
-
             </div>
 
-
-            <div class="full">
-
+            <div
+              style="
+                display:flex;
+                align-items:end
+              "
+            >
               <button
                 class="btn btn-primary"
                 onclick="publierMessage()"
               >
                 Publier
               </button>
-
             </div>
 
           </div>
-
         </div>
       `
       :
       ''
     }
-
 
     <div class="section-title">
       <h3>
@@ -2612,46 +2550,36 @@ async function chargerListeMembres() {
       </h3>
     </div>
 
-
     <div
       id="messages-list"
       class="list"
     >
-
       <div class="empty">
         Chargement...
       </div>
-
     </div>
   `;
-
 
   await chargerMessages();
 }
 
-
 async function chargerMessages() {
-
   const zone =
     document.getElementById(
       'messages-list'
     );
 
-  if (!zone) {
-    return;
-  }
-
-
-  if (schemaMode === 'v5') {
+  if (
+    schemaMode === 'v5'
+  ) {
 
     const { data, error } =
       await supabaseClient.rpc(
         'list_messages_v5',
         {
-          p_limit: 50
+          p_limit: 30
         }
       );
-
 
     if (
       error ||
@@ -2664,51 +2592,15 @@ async function chargerMessages() {
       return;
     }
 
-
     zone.innerHTML =
       data
         .map(
-          m =>
-            `
-              <article class="list-item">
-
-                <div>
-
-                  <h4>
-                    📢
-                    ${echapperHtml(
-                      m.title
-                    )}
-                  </h4>
-
-                  <p>
-                    ${echapperHtml(
-                      m.body
-                    )}
-                  </p>
-
-                  <p>
-                    ${
-                      m.section_nom
-                      ?
-                      echapperHtml(
-                        m.section_nom
-                      )
-                      :
-                      'Tous les conducteurs'
-                    }
-                  </p>
-
-                </div>
-
-              </article>
-            `
+          messageHtmlV5
         )
         .join('');
 
     return;
   }
-
 
   const { data, error } =
     await supabaseClient
@@ -2724,8 +2616,7 @@ async function chargerMessages() {
           ascending: false
         }
       )
-      .limit(50);
-
+      .limit(30);
 
   if (
     error ||
@@ -2738,12 +2629,13 @@ async function chargerMessages() {
     return;
   }
 
-
   const visible =
     data.filter(
       m =>
-        droits().admin ||
-        !m.section_id ||
+        droits().admin
+        ||
+        !m.section_id
+        ||
         Number(
           m.section_id
         ) ===
@@ -2752,25 +2644,20 @@ async function chargerMessages() {
         )
     );
 
-
   zone.innerHTML =
     visible
       .map(
-        m =>
-          messageHtml(m)
+        messageHtmlLegacy
       )
       .join('');
 }
 
-
 async function publierMessage() {
-
   if (
     !droits().messages
   ) {
     return;
   }
-
 
   const titre =
     document
@@ -2780,7 +2667,6 @@ async function publierMessage() {
       ?.value
       .trim();
 
-
   const contenu =
     document
       .getElementById(
@@ -2789,14 +2675,12 @@ async function publierMessage() {
       ?.value
       .trim();
 
-
   const section =
     document
       .getElementById(
         'msg-section'
       )
       ?.value;
-
 
   if (
     !titre ||
@@ -2810,9 +2694,7 @@ async function publierMessage() {
     return;
   }
 
-
   let error = null;
-
 
   if (
     schemaMode === 'v5'
@@ -2822,8 +2704,10 @@ async function publierMessage() {
       await supabaseClient
         .from('messages_v5')
         .insert({
-          title: titre,
-          body: contenu,
+          title:
+            titre,
+          body:
+            contenu,
           section_id:
             section
             ?
@@ -2848,15 +2732,16 @@ async function publierMessage() {
             Number(section)
             :
             null,
-          important: false,
-          publie: true,
+          important:
+            false,
+          publie:
+            true,
           created_by:
             profilActuel.id
         });
 
     error = rep.error;
   }
-
 
   if (error) {
 
@@ -2869,36 +2754,29 @@ async function publierMessage() {
     return;
   }
 
-
   toast(
     'Message publié.'
   );
 
-
-  await messages();
+  messages();
 }
 
-
 async function actualites() {
-
   const d =
     droits();
-
 
   const content =
     document.getElementById(
       'content'
     );
 
-
   content.innerHTML = `
-
     <div class="section-title">
       <h2>
-        Actualités VTC
+        Actualités VTC –
+        Côte d'Ivoire & Monde
       </h2>
     </div>
-
 
     ${
       d.news
@@ -2910,50 +2788,38 @@ async function actualites() {
             Publier une actualité
           </h3>
 
-
           <div class="form-grid">
 
             <div>
-
               <label>
                 Titre
               </label>
-
               <input id="news-title">
-
             </div>
 
-
             <div>
-
               <label>
                 Pays
               </label>
 
               <input
                 id="news-country"
-                placeholder="Côte d'Ivoire"
+                placeholder="Côte d'Ivoire, France, Sénégal..."
               >
-
             </div>
 
-
             <div>
-
               <label>
                 Catégorie
               </label>
 
               <input
                 id="news-cat"
-                placeholder="Réglementation, sécurité..."
+                placeholder="Réglementation, sécurité, innovation..."
               >
-
             </div>
 
-
             <div>
-
               <label>
                 Lien source
               </label>
@@ -2963,12 +2829,9 @@ async function actualites() {
                 type="url"
                 placeholder="https://..."
               >
-
             </div>
 
-
             <div class="full">
-
               <label>
                 Résumé
               </label>
@@ -2976,29 +2839,23 @@ async function actualites() {
               <textarea
                 id="news-summary"
               ></textarea>
-
             </div>
 
-
             <div class="full">
-
               <button
                 class="btn btn-primary"
                 onclick="publierActualite()"
               >
                 Publier l'actualité
               </button>
-
             </div>
 
           </div>
-
         </div>
       `
       :
       ''
     }
-
 
     <div class="section-title">
       <h3>
@@ -3006,35 +2863,24 @@ async function actualites() {
       </h3>
     </div>
 
-
     <div
       id="news-list"
       class="list"
     >
-
       <div class="empty">
         Chargement...
       </div>
-
     </div>
   `;
-
 
   await chargerActualites();
 }
 
-
 async function chargerActualites() {
-
   const zone =
     document.getElementById(
       'news-list'
     );
-
-  if (!zone) {
-    return;
-  }
-
 
   if (
     schemaMode === 'v5'
@@ -3044,10 +2890,6 @@ async function chargerActualites() {
       await supabaseClient
         .from('news_v5')
         .select('*')
-        .eq(
-          'published',
-          true
-        )
         .order(
           'published_at',
           {
@@ -3055,7 +2897,6 @@ async function chargerActualites() {
           }
         )
         .limit(50);
-
 
     if (
       error ||
@@ -3068,18 +2909,15 @@ async function chargerActualites() {
       return;
     }
 
-
     zone.innerHTML =
       data
         .map(
-          n =>
-            newsHtmlV5(n)
+          newsHtmlV5
         )
         .join('');
 
     return;
   }
-
 
   const { data, error } =
     await supabaseClient
@@ -3097,7 +2935,6 @@ async function chargerActualites() {
       )
       .limit(50);
 
-
   if (
     error ||
     !(data || []).length
@@ -3109,25 +2946,20 @@ async function chargerActualites() {
     return;
   }
 
-
   zone.innerHTML =
     data
       .map(
-        n =>
-          newsHtml(n)
+        newsHtmlLegacy
       )
       .join('');
 }
 
-
 async function publierActualite() {
-
   if (
     !droits().news
   ) {
     return;
   }
-
 
   const titre =
     document
@@ -3137,7 +2969,6 @@ async function publierActualite() {
       ?.value
       .trim();
 
-
   const pays =
     document
       .getElementById(
@@ -3146,7 +2977,6 @@ async function publierActualite() {
       ?.value
       .trim();
 
-
   const categorie =
     document
       .getElementById(
@@ -3154,7 +2984,6 @@ async function publierActualite() {
       )
       ?.value
       .trim();
-
 
   const source_url =
     document
@@ -3166,7 +2995,6 @@ async function publierActualite() {
       ||
       null;
 
-
   const resume =
     document
       .getElementById(
@@ -3174,7 +3002,6 @@ async function publierActualite() {
       )
       ?.value
       .trim();
-
 
   if (
     !titre ||
@@ -3188,9 +3015,7 @@ async function publierActualite() {
     return;
   }
 
-
   let error = null;
-
 
   if (
     schemaMode === 'v5'
@@ -3200,8 +3025,8 @@ async function publierActualite() {
       await supabaseClient
         .from('news_v5')
         .insert({
-          title: titre,
-          summary: resume,
+          title:
+            titre,
           country:
             pays ||
             'International',
@@ -3209,7 +3034,10 @@ async function publierActualite() {
             categorie ||
             'Actualité',
           source_url,
-          published: true
+          summary:
+            resume,
+          published:
+            true
         });
 
     error = rep.error;
@@ -3225,7 +3053,8 @@ async function publierActualite() {
           categorie,
           source_url,
           resume,
-          publie: true,
+          publie:
+            true,
           created_by:
             profilActuel.id,
           published_at:
@@ -3235,7 +3064,6 @@ async function publierActualite() {
 
     error = rep.error;
   }
-
 
   if (error) {
 
@@ -3248,39 +3076,31 @@ async function publierActualite() {
     return;
   }
 
-
   toast(
     'Actualité publiée.'
   );
 
-
-  await actualites();
+  actualites();
 }
 
-
 async function procesVerbaux() {
-
   if (
     !droits().secretariat
   ) {
     return;
   }
 
-
   const content =
     document.getElementById(
       'content'
     );
 
-
   content.innerHTML = `
-
     <div class="section-title">
       <h2>
         Secrétariat / Procès-verbaux
       </h2>
     </div>
-
 
     <div class="card">
 
@@ -3288,11 +3108,9 @@ async function procesVerbaux() {
         Archiver un PV
       </h3>
 
-
       <div class="form-grid">
 
         <div>
-
           <label>
             Titre du PV
           </label>
@@ -3301,12 +3119,9 @@ async function procesVerbaux() {
             id="pv-title"
             placeholder="PV réunion du bureau"
           >
-
         </div>
 
-
         <div>
-
           <label>
             Date de la réunion
           </label>
@@ -3315,27 +3130,22 @@ async function procesVerbaux() {
             id="pv-date"
             type="date"
           >
-
         </div>
-
-
-        <div class="full">
-
-          <label>
-            Résumé
-          </label>
-
-          <textarea
-            id="pv-summary"
-          ></textarea>
-
-        </div>
-
 
         <div>
-
           <label>
-            Document PDF ou Word
+            Type de réunion
+          </label>
+
+          <input
+            id="pv-type"
+            placeholder="Bureau, AG, rencontre..."
+          >
+        </div>
+
+        <div>
+          <label>
+            Document
           </label>
 
           <input
@@ -3343,30 +3153,29 @@ async function procesVerbaux() {
             type="file"
             accept=".pdf,.doc,.docx"
           >
-
         </div>
 
+        <div class="full">
+          <label>
+            Résumé
+          </label>
 
-        <div
-          style="
-            display:flex;
-            align-items:end
-          "
-        >
+          <textarea
+            id="pv-summary"
+          ></textarea>
+        </div>
 
+        <div class="full">
           <button
             class="btn btn-primary"
             onclick="archiverPV()"
           >
             Archiver le PV
           </button>
-
         </div>
 
       </div>
-
     </div>
-
 
     <div class="section-title">
       <h3>
@@ -3374,32 +3183,25 @@ async function procesVerbaux() {
       </h3>
     </div>
 
-
     <div
       id="pv-list"
       class="list"
     >
-
       <div class="empty">
         Chargement...
       </div>
-
     </div>
   `;
-
 
   await chargerPV();
 }
 
-
 async function archiverPV() {
-
   if (
     !droits().secretariat
   ) {
     return;
   }
-
 
   const titre =
     document
@@ -3409,14 +3211,12 @@ async function archiverPV() {
       ?.value
       .trim();
 
-
   const date =
     document
       .getElementById(
         'pv-date'
       )
       ?.value;
-
 
   const resume =
     document
@@ -3428,6 +3228,15 @@ async function archiverPV() {
       ||
       null;
 
+  const meetingType =
+    document
+      .getElementById(
+        'pv-type'
+      )
+      ?.value
+      .trim()
+      ||
+      null;
 
   const file =
     document
@@ -3435,7 +3244,6 @@ async function archiverPV() {
         'pv-file'
       )
       ?.files?.[0];
-
 
   if (
     !titre ||
@@ -3450,32 +3258,29 @@ async function archiverPV() {
     return;
   }
 
-
   const safe =
     file.name.replace(
       /[^a-zA-Z0-9._-]/g,
       '_'
     );
 
-
   const path =
     `${new Date().getFullYear()}/${authUserId || profilActuel.id}/${Date.now()}-${safe}`;
 
-
   const bucket =
     schemaMode === 'v5'
-      ?
-      'minutes-docs'
-      :
-      'pv-files';
-
+    ?
+    'minutes-docs'
+    :
+    'pv-files';
 
   toast(
     'Envoi du document...'
   );
 
-
-  const { error: uploadError } =
+  const {
+    error: e1
+  } =
     await supabaseClient
       .storage
       .from(bucket)
@@ -3487,12 +3292,9 @@ async function archiverPV() {
         }
       );
 
+  if (e1) {
 
-  if (uploadError) {
-
-    console.error(
-      uploadError
-    );
+    console.error(e1);
 
     toast(
       "Impossible d'envoyer le fichier."
@@ -3501,9 +3303,7 @@ async function archiverPV() {
     return;
   }
 
-
-  let error = null;
-
+  let e2 = null;
 
   if (
     schemaMode === 'v5'
@@ -3513,13 +3313,19 @@ async function archiverPV() {
       await supabaseClient
         .from('minutes_v5')
         .insert({
-          title: titre,
-          meeting_date: date,
-          summary: resume,
-          file_path: path
+          title:
+            titre,
+          meeting_date:
+            date,
+          meeting_type:
+            meetingType,
+          summary:
+            resume,
+          file_path:
+            path
         });
 
-    error = rep.error;
+    e2 = rep.error;
 
   } else {
 
@@ -3528,24 +3334,26 @@ async function archiverPV() {
         .from('pv_documents')
         .insert({
           titre,
-          date_reunion: date,
+          date_reunion:
+            date,
           type_pv:
-            'Procès-verbal',
+            meetingType ||
+            'Réunion',
           resume,
-          file_path: path,
+          file_path:
+            path,
           file_name:
             file.name,
           created_by:
             profilActuel.id
         });
 
-    error = rep.error;
+    e2 = rep.error;
   }
 
+  if (e2) {
 
-  if (error) {
-
-    console.error(error);
+    console.error(e2);
 
     toast(
       'Fichier envoyé mais archivage impossible.'
@@ -3554,37 +3362,24 @@ async function archiverPV() {
     return;
   }
 
-
   toast(
     'PV archivé.'
   );
 
-
-  await procesVerbaux();
+  procesVerbaux();
 }
 
-
 async function chargerPV() {
-
   const zone =
     document.getElementById(
       'pv-list'
     );
 
-  if (!zone) {
-    return;
-  }
-
-
-  let data = null;
-  let error = null;
-
-
   if (
     schemaMode === 'v5'
   ) {
 
-    const rep =
+    const { data, error } =
       await supabaseClient
         .from('minutes_v5')
         .select('*')
@@ -3596,89 +3391,57 @@ async function chargerPV() {
         )
         .limit(60);
 
-    data = rep.data;
-    error = rep.error;
+    if (
+      error ||
+      !(data || []).length
+    ) {
 
-  } else {
+      zone.innerHTML =
+        '<div class="empty">Aucun PV archivé.</div>';
 
-    const rep =
-      await supabaseClient
-        .from('pv_documents')
-        .select('*')
-        .order(
-          'date_reunion',
-          {
-            ascending: false
-          }
-        )
-        .limit(60);
-
-    data = rep.data;
-    error = rep.error;
-  }
-
-
-  if (
-    error ||
-    !(data || []).length
-  ) {
+      return;
+    }
 
     zone.innerHTML =
-      '<div class="empty">Aucun PV archivé.</div>';
+      data
+        .map(p => `
+          <div class="list-item">
 
-    return;
-  }
+            <div>
 
+              <h4>
+                📄
+                ${echapperHtml(
+                  p.title
+                )}
+              </h4>
 
-  zone.innerHTML =
-    data
-      .map(
-        p => {
+              <p>
+                ${
+                  new Date(
+                    p.meeting_date
+                  )
+                  .toLocaleDateString(
+                    'fr-FR'
+                  )
+                }
+                ·
+                ${echapperHtml(
+                  p.meeting_type ||
+                  ''
+                )}
+              </p>
 
-          const titre =
-            p.title ||
-            p.titre;
+              <p>
+                ${echapperHtml(
+                  p.summary ||
+                  ''
+                )}
+              </p>
 
-          const date =
-            p.meeting_date ||
-            p.date_reunion;
+            </div>
 
-          const resume =
-            p.summary ||
-            p.resume ||
-            '';
-
-          return `
-            <div class="list-item">
-
-              <div>
-
-                <h4>
-                  📄
-                  ${echapperHtml(
-                    titre
-                  )}
-                </h4>
-
-                <p>
-                  ${
-                    new Date(
-                      date
-                    )
-                    .toLocaleDateString(
-                      'fr-FR'
-                    )
-                  }
-                </p>
-
-                <p>
-                  ${echapperHtml(
-                    resume
-                  )}
-                </p>
-
-              </div>
-
+            <div class="list-actions">
 
               ${
                 p.file_path
@@ -3698,22 +3461,101 @@ async function chargerPV() {
               }
 
             </div>
-          `;
+
+          </div>
+        `)
+        .join('');
+
+    return;
+  }
+
+  const { data, error } =
+    await supabaseClient
+      .from('pv_documents')
+      .select('*')
+      .order(
+        'date_reunion',
+        {
+          ascending: false
         }
       )
+      .limit(60);
+
+  if (
+    error ||
+    !(data || []).length
+  ) {
+
+    zone.innerHTML =
+      '<div class="empty">Aucun PV archivé.</div>';
+
+    return;
+  }
+
+  zone.innerHTML =
+    data
+      .map(p => `
+        <div class="list-item">
+
+          <div>
+
+            <h4>
+              📄
+              ${echapperHtml(
+                p.titre
+              )}
+            </h4>
+
+            <p>
+              ${
+                new Date(
+                  p.date_reunion
+                )
+                .toLocaleDateString(
+                  'fr-FR'
+                )
+              }
+              ·
+              ${echapperHtml(
+                p.type_pv ||
+                ''
+              )}
+            </p>
+
+            <p>
+              ${echapperHtml(
+                p.resume ||
+                ''
+              )}
+            </p>
+
+          </div>
+
+          <div class="list-actions">
+
+            <button
+              class="btn btn-light btn-small"
+              onclick="ouvrirPV('${echapperHtml(
+                p.file_path
+              )}')"
+            >
+              Ouvrir
+            </button>
+
+          </div>
+
+        </div>
+      `)
       .join('');
 }
 
-
 async function ouvrirPV(path) {
-
   const bucket =
     schemaMode === 'v5'
-      ?
-      'minutes-docs'
-      :
-      'pv-files';
-
+    ?
+    'minutes-docs'
+    :
+    'pv-files';
 
   const { data, error } =
     await supabaseClient
@@ -3723,7 +3565,6 @@ async function ouvrirPV(path) {
         path,
         300
       );
-
 
   if (
     error ||
@@ -3737,7 +3578,6 @@ async function ouvrirPV(path) {
     return;
   }
 
-
   window.open(
     data.signedUrl,
     '_blank',
@@ -3745,204 +3585,395 @@ async function ouvrirPV(path) {
   );
 }
 
-
 async function finances() {
-
   if (
     !droits().finance
   ) {
     return;
   }
 
-
   const content =
     document.getElementById(
       'content'
     );
 
-
   content.innerHTML = `
-
     <div class="section-title">
       <h2>
         Finances ACVTC-CI
       </h2>
     </div>
 
-
     <div class="grid">
 
       <div class="kpi">
-
         <small>
           Cotisation mensuelle
         </small>
-
         <b>
           500 FCFA
         </b>
-
       </div>
 
-
       <div class="kpi">
-
         <small>
-          Après deux semaines
+          Retard après 2 semaines
         </small>
-
         <b>
           700 FCFA
         </b>
-
       </div>
 
     </div>
 
+    <div class="section-title">
+      <h3>
+        Paiements en attente
+      </h3>
+    </div>
+
+    <div
+      id="pending-payments"
+      class="list"
+    >
+      <div class="empty">
+        Chargement...
+      </div>
+    </div>
+
+    <div class="section-title">
+      <h3>
+        Historique confirmé
+      </h3>
+    </div>
 
     <div
       id="finance-list"
       class="list"
-      style="margin-top:14px"
     >
-
       <div class="empty">
         Chargement...
       </div>
-
     </div>
   `;
-
-
-  const zone =
-    document.getElementById(
-      'finance-list'
-    );
-
 
   if (
     schemaMode !== 'v5'
   ) {
 
-    zone.innerHTML =
-      '<div class="empty">Module financier ancien disponible.</div>';
+    document
+      .getElementById(
+        'pending-payments'
+      )
+      .innerHTML =
+      '<div class="empty">Validation disponible dans la V5.</div>';
+
+    document
+      .getElementById(
+        'finance-list'
+      )
+      .innerHTML =
+      '<div class="empty">Ancien module financier en consultation.</div>';
 
     return;
   }
 
+  const [
+    {
+      data: pending,
+      error: ep
+    },
+    {
+      data: confirmed,
+      error: ec
+    }
+  ] =
+    await Promise.all([
 
-  const { data, error } =
-    await supabaseClient
-      .from(
-        'contributions_v5'
-      )
-      .select(
-        '*, members_v5(nom_complet,numero_membre)'
-      )
-      .order(
-        'updated_at',
-        {
-          ascending: false
-        }
-      )
-      .limit(100);
+      supabaseClient
+        .from(
+          'payment_declarations_v5'
+        )
+        .select(
+          'id,member_id,period,total_amount,payment_method,transaction_reference,status,declared_at,members_v5(nom_complet,numero_membre)'
+        )
+        .eq(
+          'status',
+          'PENDING'
+        )
+        .order(
+          'declared_at',
+          {
+            ascending: true
+          }
+        )
+        .limit(100),
 
+      supabaseClient
+        .from(
+          'contributions_v5'
+        )
+        .select(
+          'id,member_id,period,amount,penalty,status,payment_method,paid_at,members_v5(nom_complet,numero_membre)'
+        )
+        .order(
+          'period',
+          {
+            ascending: false
+          }
+        )
+        .limit(100)
 
-  if (
-    error ||
-    !(data || []).length
+    ]);
+
+  const pz =
+    document.getElementById(
+      'pending-payments'
+    );
+
+  if (ep) {
+
+    console.error(ep);
+
+    pz.innerHTML =
+      '<div class="empty">Impossible de charger les paiements en attente.</div>';
+
+  } else if (
+    !(pending || []).length
   ) {
 
-    zone.innerHTML =
-      '<div class="empty">Aucun paiement enregistré pour le moment.</div>';
+    pz.innerHTML =
+      '<div class="empty">Aucun paiement en attente.</div>';
+
+  } else {
+
+    pz.innerHTML =
+      pending
+        .map(p => `
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${echapperHtml(
+                  p.members_v5
+                    ?.nom_complet
+                    ||
+                  'Membre'
+                )}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  p.members_v5
+                    ?.numero_membre
+                    ||
+                  ''
+                )}
+                ·
+                ${
+                  new Date(
+                    p.period
+                  )
+                  .toLocaleDateString(
+                    'fr-FR',
+                    {
+                      month:
+                        'long',
+                      year:
+                        'numeric'
+                    }
+                  )
+                }
+              </p>
+
+              <p>
+                ${p.total_amount}
+                FCFA
+                ·
+                ${echapperHtml(
+                  p.payment_method
+                )}
+                · Réf.
+                ${echapperHtml(
+                  p.transaction_reference
+                )}
+              </p>
+
+            </div>
+
+            <div class="list-actions">
+
+              <button
+                class="btn btn-primary btn-small"
+                onclick="traiterPaiement('${p.id}','CONFIRM')"
+              >
+                Confirmer
+              </button>
+
+              <button
+                class="btn btn-light btn-small"
+                onclick="traiterPaiement('${p.id}','REJECT')"
+              >
+                Rejeter
+              </button>
+
+            </div>
+
+          </div>
+        `)
+        .join('');
+  }
+
+  const hz =
+    document.getElementById(
+      'finance-list'
+    );
+
+  if (
+    ec ||
+    !(confirmed || []).length
+  ) {
+
+    hz.innerHTML =
+      '<div class="empty">Aucun paiement confirmé pour le moment.</div>';
+
+  } else {
+
+    hz.innerHTML =
+      confirmed
+        .map(c => `
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${echapperHtml(
+                  c.members_v5
+                    ?.nom_complet
+                    ||
+                  'Membre'
+                )}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  c.members_v5
+                    ?.numero_membre
+                    ||
+                  ''
+                )}
+                ·
+                ${
+                  new Date(
+                    c.period
+                  )
+                  .toLocaleDateString(
+                    'fr-FR',
+                    {
+                      month:
+                        'long',
+                      year:
+                        'numeric'
+                    }
+                  )
+                }
+              </p>
+
+              <p>
+                ✅
+                ${
+                  Number(
+                    c.amount ||
+                    0
+                  )
+                  +
+                  Number(
+                    c.penalty ||
+                    0
+                  )
+                }
+                FCFA
+                ·
+                ${echapperHtml(
+                  c.payment_method ||
+                  ''
+                )}
+              </p>
+
+            </div>
+
+          </div>
+        `)
+        .join('');
+  }
+}
+
+async function traiterPaiement(
+  id,
+  action
+) {
+  if (
+    !droits().finance
+    ||
+    schemaMode !== 'v5'
+  ) {
+    return;
+  }
+
+  let reason = null;
+
+  if (
+    action === 'REJECT'
+  ) {
+
+    reason =
+      window.prompt(
+        'Motif du rejet (facultatif) :'
+      )
+      ||
+      null;
+  }
+
+  const { error } =
+    await supabaseClient.rpc(
+      'review_payment_v5',
+      {
+        p_declaration_id:
+          id,
+        p_action:
+          action,
+        p_reason:
+          reason
+      }
+    );
+
+  if (error) {
+
+    console.error(error);
+
+    toast(
+      error.message ||
+      'Traitement impossible.'
+    );
 
     return;
   }
 
+  toast(
+    action === 'CONFIRM'
+    ?
+    'Paiement confirmé.'
+    :
+    'Paiement rejeté.'
+  );
 
-  zone.innerHTML =
-    data
-      .map(
-        c => {
-
-          const total =
-            Number(
-              c.amount || 0
-            )
-            +
-            Number(
-              c.penalty || 0
-            );
-
-
-          return `
-            <div class="list-item">
-
-              <div>
-
-                <h4>
-                  ${
-                    echapperHtml(
-                      c.members_v5
-                        ?.nom_complet
-                        ||
-                      'Membre'
-                    )
-                  }
-                </h4>
-
-                <p>
-                  ${
-                    echapperHtml(
-                      c.members_v5
-                        ?.numero_membre
-                        ||
-                      ''
-                    )
-                  }
-                </p>
-
-                <p>
-                  ${
-                    new Date(
-                      c.period
-                    )
-                    .toLocaleDateString(
-                      'fr-FR',
-                      {
-                        month:
-                          'long',
-                        year:
-                          'numeric'
-                      }
-                    )
-                  }
-                  ·
-                  ${total}
-                  FCFA
-                </p>
-
-                <p>
-                  Statut :
-                  ${echapperHtml(
-                    c.status
-                  )}
-                </p>
-
-              </div>
-
-            </div>
-          `;
-        }
-      )
-      .join('');
+  await finances();
 }
-
 
 async function afficherVerification(
   token
 ) {
-
   document
     .getElementById(
       'auth-screen'
@@ -3950,7 +3981,6 @@ async function afficherVerification(
     ?.classList.add(
       'hide'
     );
-
 
   document
     .getElementById(
@@ -3960,7 +3990,6 @@ async function afficherVerification(
       'hide'
     );
 
-
   document
     .getElementById(
       'verify-screen'
@@ -3969,49 +3998,50 @@ async function afficherVerification(
       'hide'
     );
 
-
   const zone =
     document.getElementById(
       'verify-content'
     );
 
-
   let data = null;
   let error = null;
-
 
   let rep =
     await supabaseClient.rpc(
       'verify_member_card_v5',
       {
-        p_token: token
+        p_token:
+          token
       }
     );
 
+  data =
+    rep.data;
+
+  error =
+    rep.error;
 
   if (
-    !rep.error &&
-    rep.data &&
-    rep.data.length
+    error ||
+    !data ||
+    !data.length
   ) {
-
-    data = rep.data;
-    schemaMode = 'v5';
-
-  } else {
 
     rep =
       await supabaseClient.rpc(
         'verify_member_card',
         {
-          p_token: token
+          p_token:
+            token
         }
       );
 
-    data = rep.data;
-    error = rep.error;
-  }
+    data =
+      rep.data;
 
+    error =
+      rep.error;
+  }
 
   if (
     error ||
@@ -4033,13 +4063,10 @@ async function afficherVerification(
     return;
   }
 
-
   const m =
     data[0];
 
-
   zone.innerHTML = `
-
     <div class="verify-person">
 
       ${
@@ -4061,13 +4088,11 @@ async function afficherVerification(
         `
       }
 
-
       <h2>
         ${echapperHtml(
           m.nom_complet
         )}
       </h2>
-
 
       <div
         class="badge ${
@@ -4078,7 +4103,6 @@ async function afficherVerification(
           'badge-red'
         }"
       >
-
         ${
           m.actif
           ?
@@ -4086,9 +4110,7 @@ async function afficherVerification(
           :
           'Membre inactif'
         }
-
       </div>
-
 
       <p>
         <b>N° membre :</b>
@@ -4097,7 +4119,6 @@ async function afficherVerification(
         )}
       </p>
 
-
       <p>
         <b>Section :</b>
         ${echapperHtml(
@@ -4105,40 +4126,24 @@ async function afficherVerification(
         )}
       </p>
 
-
-      <p>
-        <b>Rôle :</b>
-        ${echapperHtml(
-          m.role_nom
-        )}
-      </p>
-
     </div>
   `;
 }
 
-
 async function logout() {
-
   await supabaseClient
     .auth
     .signOut();
 
-
   profilActuel = null;
-
   authUserId = null;
-
   schemaMode = 'unknown';
-
 
   window.location.href =
     window.location.pathname;
 }
 
-
 async function demarrer() {
-
   if (
     'serviceWorker'
     in navigator
@@ -4150,26 +4155,19 @@ async function demarrer() {
         '/sw.js'
       )
       .catch(
-        e =>
-          console.warn(
-            'Service Worker',
-            e
-          )
+        () => {}
       );
   }
-
 
   const params =
     new URLSearchParams(
       window.location.search
     );
 
-
   const verify =
     params.get(
       'verify'
     );
-
 
   if (verify) {
 
@@ -4180,9 +4178,7 @@ async function demarrer() {
     return;
   }
 
-
   await chargerReferentiels();
-
 
   const {
     data: {
@@ -4193,7 +4189,6 @@ async function demarrer() {
       .auth
       .getSession();
 
-
   if (
     session?.user
   ) {
@@ -4203,6 +4198,5 @@ async function demarrer() {
     );
   }
 }
-
 
 demarrer();
