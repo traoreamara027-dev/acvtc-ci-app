@@ -1,4 +1,5 @@
-<!doctype html>
+
+  <!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
@@ -11,85 +12,939 @@
   <link rel="stylesheet" href="/style.css">
   <title>ACVTC-CI V5</title>
 </head>
+
 <body>
+
   <div id="toast" class="toast hide" role="status"></div>
 
+  <!-- VÉRIFICATION CARTE -->
   <section id="verify-screen" class="verify-shell hide">
     <div class="auth-card verify-card">
-      <img src="/logo-acvtc.png" class="auth-logo" alt="Logo ACVTC-CI">
+
+      <img
+        src="/logo-acvtc.png"
+        class="auth-logo"
+        alt="Logo ACVTC-CI"
+      >
+
       <h1>Vérification de carte</h1>
-      <div id="verify-content" class="center muted">Vérification en cours...</div>
+
+      <div
+        id="verify-content"
+        class="center muted"
+      >
+        Vérification en cours...
+      </div>
+
     </div>
   </section>
 
+
+  <!-- CONNEXION -->
   <section id="auth-screen" class="auth-shell">
+
     <div class="auth-card">
+
       <div class="brand-lockup">
-        <img src="/logo-acvtc.png" class="auth-logo" alt="Logo officiel ACVTC-CI">
+
+        <img
+          src="/logo-acvtc.png"
+          class="auth-logo"
+          alt="Logo officiel ACVTC-CI"
+        >
+
         <div>
-          <h1>Connexion ACVTC-CI</h1>
-          <p>On travaille aujourd'hui pour le bonheur de demain.</p>
+
+          <h1>
+            Connexion ACVTC-CI
+          </h1>
+
+          <p>
+            On travaille aujourd'hui
+            pour le bonheur de demain.
+          </p>
+
         </div>
+
       </div>
+
 
       <div class="phone-login">
-        <label for="phone">Numéro de téléphone</label>
-        <input id="phone" type="tel" inputmode="tel" placeholder="07 02 79 24 46" autocomplete="tel">
-        <button id="send-otp" class="btn btn-primary" onclick="envoyerCode()">Recevoir mon code</button>
 
-        <div id="otp-zone" class="hide">
-          <label for="otp">Code reçu par SMS</label>
-          <input id="otp" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
-          <button class="btn btn-primary" onclick="verifierCode()">Me connecter</button>
-        </div>
-        <p id="auth-message" class="note"></p>
+        <label for="legacy-email">
+          Adresse e-mail
+        </label>
+
+        <input
+          id="legacy-email"
+          type="email"
+          autocomplete="email"
+          placeholder="adresse@email.com"
+        >
+
+
+        <label for="legacy-pass">
+          Mot de passe
+        </label>
+
+        <input
+          id="legacy-pass"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Votre mot de passe"
+        >
+
+
+        <button
+          class="btn btn-primary"
+          onclick="legacyLogin()"
+        >
+          Se connecter
+        </button>
+
+
+        <button
+          class="btn btn-light"
+          style="margin-top:10px;width:100%"
+          onclick="envoyerLienMotDePasse()"
+        >
+          Mot de passe oublié
+        </button>
+
+
+        <p
+          id="auth-message"
+          class="note"
+        ></p>
+
       </div>
 
-      <details class="legacy-box">
-        <summary>Ancien accès administrateur</summary>
-        <p class="note">Accès temporaire pour les comptes déjà créés avant la V5.</p>
-        <label for="legacy-email">Adresse e-mail</label>
-        <input id="legacy-email" type="email" autocomplete="email" placeholder="adresse@email.com">
-        <label for="legacy-pass">Mot de passe</label>
-        <input id="legacy-pass" type="password" autocomplete="current-password" placeholder="Mot de passe">
-        <button class="btn btn-secondary" onclick="legacyLogin()">Connexion ancien compte</button>
-      </details>
 
       <div class="auth-footer">
-        <span>Connexion simplifiée</span>
+
+        <span>
+          Connexion par e-mail
+        </span>
+
         <span>•</span>
-        <span>Sécurisée</span>
+
+        <span>
+          Sécurisée
+        </span>
+
         <span>•</span>
-        <span>Sans e-mail pour les nouveaux comptes</span>
+
+        <span>
+          ACVTC-CI V5
+        </span>
+
       </div>
+
     </div>
+
   </section>
 
-  <section id="app-shell" class="hide">
-    <header class="app-header">
-      <div class="app-brand">
-        <img src="/logo-acvtc.png" alt="ACVTC-CI">
+
+  <!-- CRÉATION / RÉINITIALISATION MOT DE PASSE -->
+  <section
+    id="password-screen"
+    class="auth-shell hide"
+  >
+
+    <div class="auth-card">
+
+      <div class="brand-lockup">
+
+        <img
+          src="/logo-acvtc.png"
+          class="auth-logo"
+          alt="Logo ACVTC-CI"
+        >
+
         <div>
-          <b>ACVTC-CI</b>
-          <small>On travaille aujourd'hui pour le bonheur de demain.</small>
+
+          <h1>
+            Créer mon mot de passe
+          </h1>
+
+          <p>
+            Finalisez votre accès
+            à l'application ACVTC-CI.
+          </p>
+
         </div>
+
       </div>
+
+
+      <label for="new-password">
+        Nouveau mot de passe
+      </label>
+
+      <input
+        id="new-password"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Minimum 8 caractères"
+      >
+
+
+      <label for="confirm-password">
+        Confirmer le mot de passe
+      </label>
+
+      <input
+        id="confirm-password"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Confirmez votre mot de passe"
+      >
+
+
+      <button
+        class="btn btn-primary"
+        onclick="enregistrerNouveauMotDePasse()"
+      >
+        Enregistrer mon mot de passe
+      </button>
+
+
+      <p
+        id="password-message"
+        class="note"
+      ></p>
+
+    </div>
+
+  </section>
+
+
+  <!-- APPLICATION -->
+  <section id="app-shell" class="hide">
+
+    <header class="app-header">
+
+      <div class="app-brand">
+
+        <img
+          src="/logo-acvtc.png"
+          alt="ACVTC-CI"
+        >
+
+        <div>
+
+          <b>
+            ACVTC-CI
+          </b>
+
+          <small>
+            On travaille aujourd'hui
+            pour le bonheur de demain.
+          </small>
+
+        </div>
+
+      </div>
+
+
       <div class="header-actions">
-        <div id="header-user" class="header-user"></div>
-        <button class="btn-icon" title="Déconnexion" onclick="logout()">⎋</button>
+
+        <div
+          id="header-user"
+          class="header-user"
+        ></div>
+
+        <button
+          class="btn-icon"
+          title="Déconnexion"
+          onclick="logout()"
+        >
+          ⎋
+        </button>
+
       </div>
+
     </header>
 
+
     <main class="app-main">
-      <nav id="nav" class="app-nav"></nav>
-      <section id="content"></section>
+
+      <nav
+        id="nav"
+        class="app-nav"
+      ></nav>
+
+      <section
+        id="content"
+      ></section>
+
     </main>
+
   </section>
 
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <script src="/app.js"></script>
+
+
+  <!-- CORRECTIF V5 : AUTHENTIFICATION E-MAIL -->
+  <script>
+
+    /*
+     * ACVTC-CI V5
+     * Connexion par e-mail + mot de passe.
+     * Le téléphone reste une information
+     * du profil du membre.
+     */
+
+
+    async function envoyerLienMotDePasse() {
+
+      const email =
+        document
+          .getElementById('legacy-email')
+          ?.value
+          .trim()
+          .toLowerCase();
+
+      if (!email || !email.includes('@')) {
+
+        setAuthMessage(
+          'Saisissez d’abord votre adresse e-mail.',
+          true
+        );
+
+        return;
+      }
+
+
+      setAuthMessage(
+        'Envoi du lien en cours...'
+      );
+
+
+      const redirectTo =
+        window.location.origin +
+        window.location.pathname;
+
+
+      const { error } =
+        await supabaseClient
+          .auth
+          .resetPasswordForEmail(
+            email,
+            {
+              redirectTo
+            }
+          );
+
+
+      if (error) {
+
+        console.error(error);
+
+        setAuthMessage(
+          "Impossible d'envoyer le lien. Réessayez.",
+          true
+        );
+
+        return;
+      }
+
+
+      setAuthMessage(
+        'Un lien de récupération vient de vous être envoyé par e-mail.'
+      );
+    }
+
+
+
+    function afficherCreationMotDePasse() {
+
+      window.__setupPasswordMode = true;
+
+      document
+        .getElementById('auth-screen')
+        ?.classList.add('hide');
+
+      document
+        .getElementById('verify-screen')
+        ?.classList.add('hide');
+
+      document
+        .getElementById('app-shell')
+        ?.classList.add('hide');
+
+      document
+        .getElementById('password-screen')
+        ?.classList.remove('hide');
+    }
+
+
+
+    async function enregistrerNouveauMotDePasse() {
+
+      const password =
+        document
+          .getElementById('new-password')
+          ?.value || '';
+
+      const confirm =
+        document
+          .getElementById('confirm-password')
+          ?.value || '';
+
+      const message =
+        document
+          .getElementById('password-message');
+
+
+      if (password.length < 8) {
+
+        if (message) {
+          message.textContent =
+            'Le mot de passe doit contenir au moins 8 caractères.';
+        }
+
+        return;
+      }
+
+
+      if (password !== confirm) {
+
+        if (message) {
+          message.textContent =
+            'Les deux mots de passe ne correspondent pas.';
+        }
+
+        return;
+      }
+
+
+      if (message) {
+        message.textContent =
+          'Enregistrement en cours...';
+      }
+
+
+      const { data, error } =
+        await supabaseClient
+          .auth
+          .updateUser({
+            password
+          });
+
+
+      if (error) {
+
+        console.error(error);
+
+        if (message) {
+          message.textContent =
+            error.message ||
+            'Impossible de créer le mot de passe.';
+        }
+
+        return;
+      }
+
+
+      window.__setupPasswordMode = false;
+
+
+      history.replaceState(
+        {},
+        document.title,
+        window.location.pathname
+      );
+
+
+      document
+        .getElementById('password-screen')
+        ?.classList.add('hide');
+
+
+      if (message) {
+        message.textContent =
+          'Mot de passe enregistré.';
+      }
+
+
+      if (data?.user) {
+
+        await chargerProfil(
+          data.user,
+          true
+        );
+
+      } else {
+
+        window.location.href =
+          window.location.pathname;
+      }
+    }
+
+
+
+    /*
+     * Empêche l'application d'ouvrir
+     * avant la création du mot de passe
+     * lorsqu'un membre clique sur
+     * une invitation ou récupération.
+     */
+
+    const urlAuthData =
+      window.location.hash +
+      '&' +
+      window.location.search;
+
+    const authInvite =
+      urlAuthData.includes('type=invite');
+
+    const authRecovery =
+      urlAuthData.includes('type=recovery');
+
+
+    if (authInvite || authRecovery) {
+
+      window.__setupPasswordMode = true;
+
+      afficherCreationMotDePasse();
+    }
+
+
+
+    const ancienneAfficherApplication =
+      afficherApplication;
+
+
+    afficherApplication =
+      function () {
+
+        if (window.__setupPasswordMode) {
+
+          afficherCreationMotDePasse();
+
+          return;
+        }
+
+        ancienneAfficherApplication();
+      };
+
+
+
+    /*
+     * AJOUT DU CHAMP E-MAIL
+     * DANS LA GESTION DES MEMBRES
+     */
+
+    const anciennePageMembres =
+      membres;
+
+
+    membres =
+      async function () {
+
+        await anciennePageMembres();
+
+
+        const membrePhone =
+          document
+            .getElementById('m-phone')
+            ?.parentElement;
+
+
+        if (
+          membrePhone &&
+          !document.getElementById('m-email')
+        ) {
+
+          membrePhone
+            .insertAdjacentHTML(
+              'afterend',
+              `
+                <div>
+                  <label>
+                    Adresse e-mail
+                  </label>
+
+                  <input
+                    id="m-email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="membre@email.com"
+                  >
+                </div>
+              `
+            );
+        }
+
+
+
+        const adminPhone =
+          document
+            .getElementById('a-phone')
+            ?.parentElement;
+
+
+        if (
+          adminPhone &&
+          !document.getElementById('a-email')
+        ) {
+
+          adminPhone
+            .insertAdjacentHTML(
+              'afterend',
+              `
+                <div>
+                  <label>
+                    Adresse e-mail
+                  </label>
+
+                  <input
+                    id="a-email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="administrateur@email.com"
+                  >
+                </div>
+              `
+            );
+        }
+
+      };
+
+
+
+    /*
+     * ENVOI DE L'INVITATION
+     */
+
+    async function envoyerInvitationV5(email) {
+
+      const redirectTo =
+        window.location.origin +
+        window.location.pathname;
+
+
+      const { data, error } =
+        await supabaseClient
+          .functions
+          .invoke(
+            'invite-member-v5',
+            {
+              body: {
+                email,
+                redirectTo
+              }
+            }
+          );
+
+
+      if (error) {
+
+        console.error(error);
+
+        return {
+          ok: false,
+          message:
+            "Membre enregistré, mais l'invitation e-mail n'a pas pu être envoyée."
+        };
+      }
+
+
+      if (data?.error) {
+
+        return {
+          ok: false,
+          message:
+            data.error
+        };
+      }
+
+
+      return {
+        ok: true,
+        message:
+          data?.message ||
+          'Invitation envoyée par e-mail.'
+      };
+    }
+
+
+
+    const ancienneAjouterMembreSimple =
+      ajouterMembreSimple;
+
+
+    ajouterMembreSimple =
+      async function () {
+
+        if (schemaMode !== 'v5') {
+
+          return ancienneAjouterMembreSimple();
+        }
+
+
+        const nom =
+          document
+            .getElementById('m-nom')
+            ?.value
+            .trim();
+
+        const phone =
+          normaliserTelephone(
+            document
+              .getElementById('m-phone')
+              ?.value
+          );
+
+        const email =
+          document
+            .getElementById('m-email')
+            ?.value
+            .trim()
+            .toLowerCase();
+
+        const section =
+          Number(
+            document
+              .getElementById('m-section')
+              ?.value
+          );
+
+
+        if (
+          !nom ||
+          !phone ||
+          !email ||
+          !email.includes('@') ||
+          !section
+        ) {
+
+          toast(
+            'Complétez le nom, le téléphone, l’e-mail et la section.'
+          );
+
+          return;
+        }
+
+
+        const { data, error } =
+          await supabaseClient.rpc(
+            'admin_create_member_v5',
+            {
+              p_nom_complet:
+                nom,
+
+              p_phone:
+                phone,
+
+              p_email:
+                email,
+
+              p_section_id:
+                section
+            }
+          );
+
+
+        if (error) {
+
+          console.error(error);
+
+          toast(
+            error.message ||
+            'Création impossible.'
+          );
+
+          return;
+        }
+
+
+        toast(
+          data
+            ? `Membre enregistré : ${data}`
+            : 'Membre enregistré.'
+        );
+
+
+        const invitation =
+          await envoyerInvitationV5(
+            email
+          );
+
+
+        toast(
+          invitation.message,
+          5000
+        );
+
+
+        const nomInput =
+          document.getElementById('m-nom');
+
+        const phoneInput =
+          document.getElementById('m-phone');
+
+        const emailInput =
+          document.getElementById('m-email');
+
+
+        if (nomInput) {
+          nomInput.value = '';
+        }
+
+        if (phoneInput) {
+          phoneInput.value = '';
+        }
+
+        if (emailInput) {
+          emailInput.value = '';
+        }
+
+
+        await chargerListeMembres();
+      };
+
+
+
+    const ancienAjouterAdministrateur =
+      ajouterAdministrateur;
+
+
+    ajouterAdministrateur =
+      async function () {
+
+        if (schemaMode !== 'v5') {
+
+          return ancienAjouterAdministrateur();
+        }
+
+
+        if (!droits().president) {
+
+          return;
+        }
+
+
+        const nom =
+          document
+            .getElementById('a-nom')
+            ?.value
+            .trim();
+
+        const phone =
+          normaliserTelephone(
+            document
+              .getElementById('a-phone')
+              ?.value
+          );
+
+        const email =
+          document
+            .getElementById('a-email')
+            ?.value
+            .trim()
+            .toLowerCase();
+
+        const section =
+          Number(
+            document
+              .getElementById('a-section')
+              ?.value
+          );
+
+        const role =
+          Number(
+            document
+              .getElementById('a-role')
+              ?.value
+          );
+
+
+        if (
+          !nom ||
+          !phone ||
+          !email ||
+          !email.includes('@') ||
+          !section ||
+          !role
+        ) {
+
+          toast(
+            'Complétez le nom, le téléphone, l’e-mail, la section et le rôle.'
+          );
+
+          return;
+        }
+
+
+        const { data, error } =
+          await supabaseClient.rpc(
+            'president_create_admin_v5',
+            {
+              p_nom_complet:
+                nom,
+
+              p_phone:
+                phone,
+
+              p_email:
+                email,
+
+              p_section_id:
+                section,
+
+              p_role_id:
+                role
+            }
+          );
+
+
+        if (error) {
+
+          console.error(error);
+
+          toast(
+            error.message ||
+            'Création impossible.'
+          );
+
+          return;
+        }
+
+
+        toast(
+          data
+            ? `Administrateur enregistré : ${data}`
+            : 'Administrateur enregistré.'
+        );
+
+
+        const invitation =
+          await envoyerInvitationV5(
+            email
+          );
+
+
+        toast(
+          invitation.message,
+          5000
+        );
+
+
+        await chargerListeMembres();
+      };
+
+  </script>
+
 </body>
 </html>
