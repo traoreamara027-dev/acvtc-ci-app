@@ -4200,3 +4200,206 @@ async function demarrer() {
 }
 
 demarrer();
+/* CORRECTIF FINANCES V5 */
+
+const ancienneFinancesV5 = finances;
+
+finances = async function () {
+
+  await ancienneFinancesV5();
+
+  if (
+    !droits().finance ||
+    schemaMode !== 'v5'
+  ) {
+    return;
+  }
+
+  const [
+    pendingRep,
+    confirmedRep
+  ] = await Promise.all([
+
+    supabaseClient.rpc(
+      'list_pending_payments_v5'
+    ),
+
+    supabaseClient.rpc(
+      'list_confirmed_contributions_v5'
+    )
+
+  ]);
+
+  const pz =
+    document.getElementById(
+      'pending-payments'
+    );
+
+  const hz =
+    document.getElementById(
+      'finance-list'
+    );
+
+
+  if (pendingRep.error) {
+
+    console.error(
+      pendingRep.error
+    );
+
+    pz.innerHTML =
+      '<div class="empty">Impossible de charger les paiements en attente.</div>';
+
+  } else if (
+    !(pendingRep.data || []).length
+  ) {
+
+    pz.innerHTML =
+      '<div class="empty">Aucun paiement en attente.</div>';
+
+  } else {
+
+    pz.innerHTML =
+      pendingRep.data
+        .map(p => `
+
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${echapperHtml(
+                  p.nom_complet || 'Membre'
+                )}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  p.numero_membre || ''
+                )}
+                ·
+                ${
+                  new Date(
+                    p.period
+                  )
+                  .toLocaleDateString(
+                    'fr-FR',
+                    {
+                      month: 'long',
+                      year: 'numeric'
+                    }
+                  )
+                }
+              </p>
+
+              <p>
+                ${p.total_amount} FCFA
+                ·
+                ${echapperHtml(
+                  p.payment_method || ''
+                )}
+                · Réf.
+                ${echapperHtml(
+                  p.transaction_reference || ''
+                )}
+              </p>
+
+            </div>
+
+            <div class="list-actions">
+
+              <button
+                class="btn btn-primary btn-small"
+                onclick="traiterPaiement('${p.id}','CONFIRM')"
+              >
+                Confirmer
+              </button>
+
+              <button
+                class="btn btn-light btn-small"
+                onclick="traiterPaiement('${p.id}','REJECT')"
+              >
+                Rejeter
+              </button>
+
+            </div>
+
+          </div>
+
+        `)
+        .join('');
+
+  }
+
+
+  if (
+    confirmedRep.error ||
+    !(confirmedRep.data || []).length
+  ) {
+
+    hz.innerHTML =
+      '<div class="empty">Aucun paiement confirmé pour le moment.</div>';
+
+  } else {
+
+    hz.innerHTML =
+      confirmedRep.data
+        .map(c => `
+
+          <div class="list-item">
+
+            <div>
+
+              <h4>
+                ${echapperHtml(
+                  c.nom_complet || 'Membre'
+                )}
+              </h4>
+
+              <p>
+                ${echapperHtml(
+                  c.numero_membre || ''
+                )}
+                ·
+                ${
+                  new Date(
+                    c.period
+                  )
+                  .toLocaleDateString(
+                    'fr-FR',
+                    {
+                      month: 'long',
+                      year: 'numeric'
+                    }
+                  )
+                }
+              </p>
+
+              <p>
+                ✅
+                ${
+                  Number(
+                    c.amount || 0
+                  )
+                  +
+                  Number(
+                    c.penalty || 0
+                  )
+                }
+                FCFA
+                ·
+                ${echapperHtml(
+                  c.payment_method || ''
+                )}
+              </p>
+
+            </div>
+
+          </div>
+
+        `)
+        .join('');
+
+  }
+
+};
