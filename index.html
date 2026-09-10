@@ -1,7 +1,7 @@
 
   <!doctype html>
 <html lang="fr">
-<head>
+<head>f
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0D1B3D">
@@ -1142,5 +1142,139 @@ envoyerInvitationV5 = async function(email) {
   };
 };
 
+</script>
+  <script>
+/* RÉGÉNÉRER UNE INVITATION D'UN MEMBRE EXISTANT */
+
+const anciennePageMembresInvitation = membres;
+
+membres = async function () {
+
+  await anciennePageMembresInvitation();
+
+  if (schemaMode !== 'v5' || !droits().admin) {
+    return;
+  }
+
+  if (document.getElementById('resend-invite-card')) {
+    return;
+  }
+
+  const liste =
+    document.getElementById('members-list');
+
+  if (!liste || !liste.parentElement) {
+    return;
+  }
+
+  const card =
+    document.createElement('div');
+
+  card.id = 'resend-invite-card';
+  card.className = 'card';
+
+  card.style.marginBottom = '16px';
+
+  card.innerHTML = `
+    <h3>
+      🔗 Renvoyer / générer une invitation
+    </h3>
+
+    <p class="note">
+      Pour un membre déjà enregistré,
+      saisissez simplement son adresse e-mail.
+      Il ne sera pas recréé.
+    </p>
+
+    <div class="form-grid">
+
+      <div>
+        <label>
+          Adresse e-mail du membre
+        </label>
+
+        <input
+          id="resend-invite-email"
+          type="email"
+          autocomplete="email"
+          placeholder="membre@email.com"
+        >
+      </div>
+
+      <div style="
+        display:flex;
+        align-items:end;
+      ">
+        <button
+          id="resend-invite-button"
+          class="btn btn-secondary"
+          onclick="regenererInvitationExistanteV5()"
+        >
+          Générer le lien
+        </button>
+      </div>
+
+    </div>
+  `;
+
+  liste.parentElement.insertBefore(
+    card,
+    liste
+  );
+};
+
+
+async function regenererInvitationExistanteV5() {
+
+  const email =
+    document
+      .getElementById('resend-invite-email')
+      ?.value
+      .trim()
+      .toLowerCase();
+
+  const bouton =
+    document
+      .getElementById('resend-invite-button');
+
+  if (!email || !email.includes('@')) {
+
+    toast(
+      'Saisissez une adresse e-mail valide.'
+    );
+
+    return;
+  }
+
+  if (bouton) {
+    bouton.disabled = true;
+    bouton.textContent =
+      'Génération en cours...';
+  }
+
+  const invitation =
+    await envoyerInvitationV5(email);
+
+  if (bouton) {
+    bouton.disabled = false;
+    bouton.textContent =
+      'Générer le lien';
+  }
+
+  if (!invitation.ok) {
+
+    toast(
+      invitation.message ||
+      'Impossible de générer le lien.'
+    );
+
+    return;
+  }
+
+  toast(
+    'Lien généré. Vous pouvez maintenant le copier.',
+    5000
+  );
+}
 </script>
 </html>
