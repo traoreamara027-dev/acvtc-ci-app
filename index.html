@@ -947,4 +947,200 @@
   </script>
 
 </body>
+  <script>
+/* CORRECTIF : LIEN D'INVITATION PERMANENT */
+
+window.__derniereInvitationV5 = null;
+
+function afficherLienInvitationPermanent(invitation) {
+  if (!invitation || !invitation.link) return;
+
+  window.__derniereInvitationV5 = invitation;
+
+  let zone = document.getElementById('invitation-link-zone');
+
+  if (!zone) {
+    zone = document.createElement('div');
+    zone.id = 'invitation-link-zone';
+
+    zone.style.marginTop = '16px';
+    zone.style.padding = '16px';
+    zone.style.border = '2px solid #163F73';
+    zone.style.borderRadius = '12px';
+    zone.style.background = '#ffffff';
+
+    const liste = document.getElementById('members-list');
+
+    if (liste && liste.parentElement) {
+      liste.parentElement.insertBefore(zone, liste);
+    } else {
+      document.getElementById('content')?.prepend(zone);
+    }
+  }
+
+  zone.innerHTML = `
+    <h3 style="margin-top:0">
+      🔗 Lien d'invitation
+    </h3>
+
+    <p>
+      <b>${echapperHtml(
+        invitation.member_name ||
+        invitation.email ||
+        'Membre ACVTC-CI'
+      )}</b>
+    </p>
+
+    <p class="note">
+      Ce lien reste affiché tant que vous êtes sur cette page.
+      Vous pouvez le copier et l'envoyer par WhatsApp.
+    </p>
+
+    <textarea
+      id="invitation-link-text"
+      readonly
+      style="
+        width:100%;
+        min-height:110px;
+        padding:10px;
+        box-sizing:border-box;
+      "
+    >${echapperHtml(invitation.link)}</textarea>
+
+    <div style="
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    ">
+
+      <button
+        class="btn btn-primary"
+        onclick="copierLienInvitationV5()"
+      >
+        📋 Copier le lien
+      </button>
+
+      <button
+        class="btn btn-secondary"
+        onclick="partagerLienInvitationV5()"
+      >
+        📤 Partager
+      </button>
+
+    </div>
+  `;
+}
+
+
+async function copierLienInvitationV5() {
+  const lien =
+    window.__derniereInvitationV5?.link ||
+    document.getElementById('invitation-link-text')?.value;
+
+  if (!lien) {
+    toast('Aucun lien disponible.');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(lien);
+    toast('Lien copié.');
+  } catch (e) {
+    const zone =
+      document.getElementById('invitation-link-text');
+
+    if (zone) {
+      zone.focus();
+      zone.select();
+    }
+
+    toast(
+      'Le lien est sélectionné. Faites Ctrl + C.'
+    );
+  }
+}
+
+
+async function partagerLienInvitationV5() {
+  const invitation =
+    window.__derniereInvitationV5;
+
+  if (!invitation?.link) {
+    toast('Aucun lien disponible.');
+    return;
+  }
+
+  const texte =
+    `Invitation ACVTC-CI\n\n` +
+    `${invitation.member_name || ''}\n` +
+    `${invitation.link}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Invitation ACVTC-CI',
+        text: texte
+      });
+      return;
+    } catch (e) {}
+  }
+
+  await copierLienInvitationV5();
+}
+
+
+envoyerInvitationV5 = async function(email) {
+
+  const redirectTo =
+    window.location.origin +
+    window.location.pathname;
+
+  const { data, error } =
+    await supabaseClient
+      .functions
+      .invoke(
+        'invite-member-v5',
+        {
+          body: {
+            email,
+            redirectTo,
+            sendEmail: true
+          }
+        }
+      );
+
+  if (error) {
+    console.error(error);
+
+    return {
+      ok: false,
+      message:
+        "Le membre est enregistré, mais l'invitation n'a pas pu être générée."
+    };
+  }
+
+  if (data?.error) {
+    return {
+      ok: false,
+      message: data.error
+    };
+  }
+
+  if (data?.link) {
+    afficherLienInvitationPermanent(data);
+  }
+
+  return {
+    ok: true,
+    link: data?.link || '',
+    member_name: data?.member_name || '',
+    email: data?.email || email,
+    message:
+      data?.message ||
+      'Invitation générée.'
+  };
+};
+
+</script>
 </html>
