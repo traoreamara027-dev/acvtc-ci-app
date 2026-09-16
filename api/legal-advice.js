@@ -15,8 +15,7 @@ export default async function handler(req, res) {
 
   const question = String(req.body?.question || '').trim().slice(0, 4000);
   if (question.length < 15) return res.status(400).json({ error: 'Décrivez davantage votre situation.' });
-  if (!process.env.AI_GATEWAY_API_KEY) return res.status(503).json({ error: "Le service juridique IA n'est pas encore activé par l'administrateur." });
-
+ 
   try {
     const { text } = await generateText({
       model: gateway('openai/gpt-5.6-luna'),
