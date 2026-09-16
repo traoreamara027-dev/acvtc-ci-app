@@ -415,6 +415,9 @@ function afficherNavigation() {
     ['accueil()', 'Accueil'],
     ['maCarte()', 'Ma carte'],
     ['cotisations()', 'Cotisations'],
+    ['suggestions()', 'Suggestions'],
+    ['conseilJuridique()', 'Conseil juridique'],
+    ['agenda()', 'Agenda'],
     ['actualites()', 'Actualités'],
     ['messages()', 'Messages']
   ];
@@ -540,6 +543,24 @@ async function accueil() {
           500 FCFA /
           700 FCFA après retard.
         </small>
+      </button>
+
+      <button class="quick" onclick="suggestions()">
+        <span class="icon">💡</span>
+        <b>Suggestions</b>
+        <small>Proposer une amélioration ou faire une remarque.</small>
+      </button>
+
+      <button class="quick navy" onclick="conseilJuridique()">
+        <span class="icon">⚖️</span>
+        <b>Conseil juridique</b>
+        <small>Recevoir une première orientation adaptée à votre situation.</small>
+      </button>
+
+      <button class="quick" onclick="agenda()">
+        <span class="icon">📅</span>
+        <b>Agenda</b>
+        <small>Consulter les prochains événements de l'association.</small>
       </button>
 
       ${

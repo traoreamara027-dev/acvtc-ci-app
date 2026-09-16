@@ -1,6 +1,11 @@
 {
   "name": "acvtc-ci-v5",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "private": true,
-  "scripts": {"start": "npx serve ."}
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "dependencies": {
+    "ai": "^7.0.102"
+  }
 }
