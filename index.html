@@ -1,5 +1,4 @@
-
-  <!doctype html>
+<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
@@ -1277,5 +1276,132 @@ async function regenererInvitationExistanteV5() {
     5000
   );
 }
+</script>
+<script>
+/* ACCÈS PROVISOIRE V5 — création sans e-mail */
+(function () {
+  const LOGIN_URL = 'https://acvtc-ci-app.vercel.app';
+
+  function messageAcces(a) {
+    return `Bonjour ${a.member_name || ''},\n\n` +
+      `Votre compte ACVTC-CI est prêt.\n` +
+      `Lien : ${a.login_url || LOGIN_URL}\n` +
+      `Identifiant : ${a.email}\n` +
+      `Mot de passe provisoire : ${a.temporary_password}\n\n` +
+      `À votre première connexion, choisissez obligatoirement un nouveau mot de passe personnel.`;
+  }
+
+  window.afficherLienInvitationPermanent = function (acces) {
+    if (!acces?.temporary_password) return;
+    window.__derniereInvitationV5 = acces;
+
+    let zone = document.getElementById('invitation-link-zone');
+    if (!zone) {
+      zone = document.createElement('div');
+      zone.id = 'invitation-link-zone';
+      const liste = document.getElementById('members-list');
+      if (liste?.parentElement) liste.parentElement.insertBefore(zone, liste);
+      else document.getElementById('content')?.prepend(zone);
+    }
+
+    const texte = messageAcces(acces);
+    zone.innerHTML = `
+      <div class="card" style="border:2px solid #14804a;margin:16px 0;background:#f4fff8">
+        <h3 style="margin-top:0">✅ Accès provisoire créé</h3>
+        <p><b>${echapperHtml(acces.member_name || 'Membre ACVTC-CI')}</b></p>
+        <p class="note">Copiez ces informations maintenant. Le mot de passe disparaîtra au rechargement de la page.</p>
+        <label>Lien de connexion</label>
+        <input readonly value="${echapperHtml(acces.login_url || LOGIN_URL)}">
+        <label>Adresse e-mail</label>
+        <input readonly value="${echapperHtml(acces.email)}">
+        <label>Mot de passe provisoire</label>
+        <input readonly value="${echapperHtml(acces.temporary_password)}" style="font-weight:800">
+        <label>Message prêt pour WhatsApp</label>
+        <textarea id="invitation-link-text" readonly style="min-height:210px">${echapperHtml(texte)}</textarea>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn btn-primary" style="width:auto;margin-top:0" onclick="copierLienInvitationV5()">📋 Copier pour WhatsApp</button>
+          <button class="btn btn-secondary" style="margin-top:0" onclick="partagerLienInvitationV5()">📤 Partager</button>
+        </div>
+      </div>`;
+    zone.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  window.copierLienInvitationV5 = async function () {
+    const acces = window.__derniereInvitationV5;
+    if (!acces?.temporary_password) return toast('Aucun accès disponible.');
+    const texte = messageAcces(acces);
+    try {
+      await navigator.clipboard.writeText(texte);
+      toast('Informations copiées. Vous pouvez les coller dans WhatsApp.');
+    } catch (_) {
+      const zone = document.getElementById('invitation-link-text');
+      zone?.focus(); zone?.select();
+      toast('Le message est sélectionné. Appuyez sur Copier.');
+    }
+  };
+
+  window.partagerLienInvitationV5 = async function () {
+    const acces = window.__derniereInvitationV5;
+    if (!acces?.temporary_password) return toast('Aucun accès disponible.');
+    const text = messageAcces(acces);
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Accès ACVTC-CI', text }); return; }
+      catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    await window.copierLienInvitationV5();
+  };
+
+  window.envoyerInvitationV5 = async function (email) {
+    const { data, error } = await supabaseClient.functions.invoke(
+      'create-temporary-access-v5',
+      { body: { email: String(email || '').trim().toLowerCase() } }
+    );
+    if (error) {
+      console.error(error);
+      return { ok: false, message: "Membre enregistré, mais l'accès provisoire n'a pas pu être créé." };
+    }
+    if (data?.error) return { ok: false, message: data.error };
+    afficherLienInvitationPermanent(data);
+    return { ok: true, ...data, message: data?.message || 'Accès provisoire créé.' };
+  };
+
+  window.enregistrerNouveauMotDePasse = async function () {
+    const password = document.getElementById('new-password')?.value || '';
+    const confirm = document.getElementById('confirm-password')?.value || '';
+    const message = document.getElementById('password-message');
+    if (password.length < 8) {
+      if (message) message.textContent = 'Le mot de passe doit contenir au moins 8 caractères.';
+      return;
+    }
+    if (password !== confirm) {
+      if (message) message.textContent = 'Les deux mots de passe ne correspondent pas.';
+      return;
+    }
+    if (message) message.textContent = 'Enregistrement en cours...';
+    const { data, error } = await supabaseClient.auth.updateUser({
+      password,
+      data: { must_change_password: false }
+    });
+    if (error) {
+      if (message) message.textContent = error.message || 'Impossible de créer le mot de passe.';
+      return;
+    }
+    window.__setupPasswordMode = false;
+    document.getElementById('password-screen')?.classList.add('hide');
+    if (data?.user) await chargerProfil(data.user, true);
+  };
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    if (!session?.user?.user_metadata?.must_change_password) return;
+    window.__setupPasswordMode = true;
+    setTimeout(() => {
+      afficherCreationMotDePasse();
+      const titre = document.querySelector('#password-screen h1');
+      const texte = document.querySelector('#password-screen .brand-lockup p');
+      if (titre) titre.textContent = 'Modifier mon mot de passe provisoire';
+      if (texte) texte.textContent = 'Choisissez maintenant votre mot de passe personnel.';
+    }, 0);
+  });
+})();
 </script>
 </html>
