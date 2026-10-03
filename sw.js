@@ -1,4 +1,4 @@
-const CACHE='acvtc-v6-3';
+const CACHE='acvtc-v6-4';
 const ASSETS=['/','/index.html','/style.css','/app.js','/modules-v51.js','/v6.js','/v6-extras.js','/v6-notifications.js','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))])));
