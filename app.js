@@ -928,7 +928,20 @@ function messageHtmlLegacy(m, gestion = false) {
   `;
 }
 
-function newsHtmlV5(n) {
+function newsHtmlV5(n, gestion = false) {
+  const actions = gestion && droits().news
+    ? `
+      <div class="list-actions">
+        <button
+          class="btn btn-light btn-small"
+          style="color:#b42318;border-color:#f4b4ae"
+          onclick="supprimerActualite('${encodeURIComponent(String(n.id))}')"
+        >
+          🗑️ Supprimer
+        </button>
+      </div>
+    `
+    : '';
   const lien =
     n.source_url
     ?
@@ -976,12 +989,26 @@ function newsHtmlV5(n) {
 
         ${lien}
 
+      ${actions}
       </div>
     </article>
   `;
 }
 
-function newsHtmlLegacy(n) {
+function newsHtmlLegacy(n, gestion = false) {
+  const actions = gestion && droits().news
+    ? `
+      <div class="list-actions">
+        <button
+          class="btn btn-light btn-small"
+          style="color:#b42318;border-color:#f4b4ae"
+          onclick="supprimerActualite('${encodeURIComponent(String(n.id))}')"
+        >
+          🗑️ Supprimer
+        </button>
+      </div>
+    `
+    : '';
   const lien =
     n.source_url
     ?
@@ -1029,6 +1056,7 @@ function newsHtmlLegacy(n) {
 
         ${lien}
 
+      ${actions}
       </div>
     </article>
   `;
@@ -2992,7 +3020,7 @@ async function chargerActualites() {
     zone.innerHTML =
       data
         .map(
-          newsHtmlV5
+          n => newsHtmlV5(n, true)
         )
         .join('');
 
@@ -3029,9 +3057,29 @@ async function chargerActualites() {
   zone.innerHTML =
     data
       .map(
-        newsHtmlLegacy
+        n => newsHtmlLegacy(n, true)
       )
       .join('');
+}
+
+async function supprimerActualite(idEncode) {
+  if (!droits().news) {
+    toast("Vous n'êtes pas autorisé à supprimer cette actualité.");
+    return;
+  }
+  const id = decodeURIComponent(String(idEncode || ''));
+  if (!id) return;
+  if (!window.confirm('Supprimer définitivement cette actualité ?')) return;
+
+  const table = schemaMode === 'v5' ? 'news_v5' : 'vtc_news';
+  const { error } = await supabaseClient.from(table).delete().eq('id', id);
+  if (error) {
+    console.error(error);
+    toast('Suppression impossible.');
+    return;
+  }
+  toast('Actualité supprimée.');
+  await chargerActualites();
 }
 
 async function publierActualite() {
