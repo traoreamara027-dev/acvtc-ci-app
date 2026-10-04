@@ -29,7 +29,7 @@
     }
     const script = document.createElement('script');
     script.id = 'acvtc-v6-script';
-    script.src = '/v6.js?v=20261004-delete-v6-3';
+    script.src = '/v6.js?v=20261004-delete-all-4';
     script.async = false;
     script.onload = chargerExtras;
     document.body.appendChild(script);
