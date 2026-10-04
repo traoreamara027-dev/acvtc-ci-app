@@ -834,7 +834,21 @@ async function chargerActualitesAccueil() {
       .join('');
 }
 
-function messageHtmlV5(m) {
+function messageHtmlV5(m, gestion = false) {
+  const actions = gestion && droits().messages
+    ? `
+      <div class="list-actions">
+        <button
+          class="btn btn-light btn-small"
+          style="color:#b42318;border-color:#f4b4ae"
+          onclick="supprimerMessage('${encodeURIComponent(String(m.id))}')"
+        >
+          🗑️ Supprimer
+        </button>
+      </div>
+    `
+    : '';
+
   return `
     <article class="list-item">
       <div>
@@ -859,11 +873,26 @@ function messageHtmlV5(m) {
           }
         </p>
       </div>
+      ${actions}
     </article>
   `;
 }
 
-function messageHtmlLegacy(m) {
+function messageHtmlLegacy(m, gestion = false) {
+  const actions = gestion && droits().messages
+    ? `
+      <div class="list-actions">
+        <button
+          class="btn btn-light btn-small"
+          style="color:#b42318;border-color:#f4b4ae"
+          onclick="supprimerMessage('${encodeURIComponent(String(m.id))}')"
+        >
+          🗑️ Supprimer
+        </button>
+      </div>
+    `
+    : '';
+
   return `
     <article class="list-item">
       <div>
@@ -894,6 +923,7 @@ function messageHtmlLegacy(m) {
           }
         </p>
       </div>
+      ${actions}
     </article>
   `;
 }
@@ -2616,7 +2646,7 @@ async function chargerMessages() {
     zone.innerHTML =
       data
         .map(
-          messageHtmlV5
+          m => messageHtmlV5(m, true)
         )
         .join('');
 
@@ -2668,7 +2698,7 @@ async function chargerMessages() {
   zone.innerHTML =
     visible
       .map(
-        messageHtmlLegacy
+        m => messageHtmlLegacy(m, true)
       )
       .join('');
 }
@@ -2780,6 +2810,35 @@ async function publierMessage() {
   );
 
   messages();
+}
+
+async function supprimerMessage(idEncode) {
+  if (!droits().messages) {
+    toast("Vous n'êtes pas autorisé à supprimer ce message.");
+    return;
+  }
+
+  const id = decodeURIComponent(String(idEncode || ''));
+  if (!id) return;
+
+  if (!window.confirm('Supprimer définitivement ce message ?')) {
+    return;
+  }
+
+  const table = schemaMode === 'v5' ? 'messages_v5' : 'messages';
+  const { error } = await supabaseClient
+    .from(table)
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error(error);
+    toast('Suppression impossible.');
+    return;
+  }
+
+  toast('Message supprimé.');
+  await chargerMessages();
 }
 
 async function actualites() {
