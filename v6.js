@@ -539,7 +539,44 @@
       const signed = await supabaseClient.storage.from('event-images').createSignedUrl(event.image_path, 3600);
       return { ...event, image_url: signed.data?.signedUrl || null };
     }));
-    zone.innerHTML = withUrls.map((e) => `<article class="card event-card">${e.image_url ? `<img src="${echapperHtml(e.image_url)}" alt="Image de l'événement">` : ''}<div class="event-body"><span class="badge badge-blue">${new Date(e.date_debut).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}</span><h3>${echapperHtml(e.titre)}</h3>${e.lieu ? `<p>📍 ${echapperHtml(e.lieu)}</p>` : ''}<div class="publication-text">${echapperHtml(e.description)}</div><p class="note">Ajouté par ${echapperHtml(e.created_by_name || 'le bureau')}</p></div></article>`).join('');
+    const peutGerer = droits().admin;
+    zone.innerHTML = withUrls.map((e) => `<article class="card event-card">${e.image_url ? `<img src="${echapperHtml(e.image_url)}" alt="Image de l'événement">` : ''}<div class="event-body"><span class="badge badge-blue">${new Date(e.date_debut).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}</span><h3>${echapperHtml(e.titre)}</h3>${e.lieu ? `<p>📍 ${echapperHtml(e.lieu)}</p>` : ''}<div class="publication-text">${echapperHtml(e.description)}</div><p class="note">Ajouté par ${echapperHtml(e.created_by_name || 'le bureau')}</p>${peutGerer ? `<div class="list-actions"><button class="btn btn-light btn-small" style="color:#b42318;border-color:#f4b4ae" onclick="supprimerEvenement('${encodeURIComponent(String(e.id))}','${encodeURIComponent(e.image_path || '')}')">🗑️ Supprimer</button></div>` : ''}</div></article>`).join('');
+  }
+
+  async function supprimerEvenementV6(idEncode, imageEncode) {
+    if (!droits().admin) {
+      toast("Vous n'êtes pas autorisé à supprimer cet événement.");
+      return;
+    }
+
+    const id = decodeURIComponent(String(idEncode || ''));
+    const imagePath = decodeURIComponent(String(imageEncode || ''));
+    if (!id) return;
+
+    if (!window.confirm("Supprimer définitivement cet événement de l'agenda ?")) {
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from('events')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error(error);
+      toast("Impossible de supprimer l'événement.", 6000);
+      return;
+    }
+
+    if (imagePath) {
+      const nettoyage = await supabaseClient.storage
+        .from('event-images')
+        .remove([imagePath]);
+      if (nettoyage.error) console.warn('Image non supprimée du stockage', nettoyage.error);
+    }
+
+    toast("L'événement a été supprimé.");
+    await chargerAgendaV6();
   }
 
   function installerV6() {
@@ -567,6 +604,7 @@
     window.agenda = agendaV6;
     window.ajouterEvenement = ajouterEvenementV6;
     window.chargerAgenda = chargerAgendaV6;
+    window.supprimerEvenement = supprimerEvenementV6;
 
     if (q('app-shell') && !q('app-shell').classList.contains('hide')) {
       navigationV6();
