@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b6b3a" />
+  <title>Administration — Préinscriptions Formation VTC</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="badge">ESPACE ADMINISTRATEUR</div>
+      <h1>Suivi des préinscriptions</h1>
+      <p class="date">Formation VTC • Bouaké • 17 octobre 2026</p>
+    </section>
+
+    <section class="card">
+      <div id="loginBox">
+        <label for="adminToken">Code administrateur</label>
+        <div class="login-row">
+          <input id="adminToken" type="password" autocomplete="current-password" placeholder="Entrez le code privé" />
+          <button id="loginBtn">Afficher le tableau</button>
+        </div>
+        <p id="loginError" class="muted"></p>
+      </div>
+
+      <div id="dashboard" hidden>
+        <div class="admin-head">
+          <div><h1>Participants</h1><span id="total" class="muted"></span></div>
+          <button id="refreshBtn">Actualiser</button>
+        </div>
+        <div id="stats" class="stats"></div>
+        <div class="toolbar">
+          <span class="muted">Les changements de statut sont enregistrés immédiatement.</span>
+          <button id="csvBtn">Télécharger CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>N°</th><th>Nom & prénoms</th><th>Téléphone</th><th>Ville</th><th>Statut</th><th>Date</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+const API='https://jxunyxingxubryyugwzn.supabase.co/functions/v1/formation-bouake-2026';
+let token=''; let rows=[];
+const loginBtn=document.getElementById('loginBtn'), dashboard=document.getElementById('dashboard'), loginBox=document.getElementById('loginBox');
+const tbody=document.getElementById('tbody'), stats=document.getElementById('stats'), total=document.getElementById('total'), loginError=document.getElementById('loginError');
+async function call(body){const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':token},body:JSON.stringify(body)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.message||'Erreur');return d}
+async function load(){try{const d=await call({action:'admin-list'});rows=d.rows||[];total.textContent=`${d.total} inscription(s) au total`;stats.innerHTML=d.stats.map(s=>`<div class="stat"><strong>${s.city}</strong><span>${s.accepted}/${s.quota} places</span><br><span class="muted">${s.remaining} restante(s) • ${s.waiting} attente</span></div>`).join('');tbody.innerHTML=rows.map(r=>`<tr><td>${String(r.id).padStart(3,'0')}</td><td><strong>${esc(r.last_name)}</strong> ${esc(r.first_name)}</td><td>${esc(r.phone)}</td><td>${esc(r.city)}</td><td><select data-id="${r.id}"><option value="preinscrit" ${r.status==='preinscrit'?'selected':''}>Préinscrit</option><option value="confirme" ${r.status==='confirme'?'selected':''}>Confirmé</option><option value="attente" ${r.status==='attente'?'selected':''}>Attente</option><option value="annule" ${r.status==='annule'?'selected':''}>Annulé</option></select></td><td>${new Date(r.created_at).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}</td></tr>`).join('');tbody.querySelectorAll('select').forEach(el=>el.addEventListener('change',async()=>{el.disabled=true;try{await call({action:'admin-status',id:Number(el.dataset.id),status:el.value});await load()}catch(e){alert(e.message);el.disabled=false}}));}catch(e){loginError.textContent=e.message;throw e}}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+loginBtn.onclick=async()=>{token=document.getElementById('adminToken').value.trim();if(!token)return;loginBtn.disabled=true;loginError.textContent='';try{await load();loginBox.hidden=true;dashboard.hidden=false}catch(_){}finally{loginBtn.disabled=false}};
+document.getElementById('adminToken').addEventListener('keydown',e=>{if(e.key==='Enter')loginBtn.click()});
+document.getElementById('refreshBtn').onclick=load;
+document.getElementById('csvBtn').onclick=()=>{const head=['Numero','Nom','Prenoms','Telephone','Ville','Statut','Date'];const lines=[head,...rows.map(r=>[r.id,r.last_name,r.first_name,r.phone,r.city,r.status,new Date(r.created_at).toLocaleString('fr-FR')])];const csv='\ufeff'+lines.map(a=>a.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='preinscriptions-formation-17-octobre-2026.csv';a.click();URL.revokeObjectURL(a.href)};
+</script>
+</body>
+</html>
