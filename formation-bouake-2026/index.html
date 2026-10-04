@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b6b3a" />
+  <title>Préinscription Formation VTC — Bouaké 17 octobre 2026</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="badge">ACVTC-CI • FORMATION 2026</div>
+      <h1>Préinscription à la formation des conducteurs VTC</h1>
+      <p class="date">📍 Bouaké • Samedi 17 octobre 2026</p>
+      <p>Remplissez ce formulaire en moins d’une minute. Une seule préinscription est acceptée par numéro de téléphone.</p>
+    </section>
+
+    <section class="card">
+      <div class="quota-strip">
+        <span><strong>100</strong> Bouaké</span>
+        <span><strong>20</strong> Yamoussoukro</span>
+        <span><strong>10</strong> Abidjan</span>
+      </div>
+
+      <form id="registrationForm" novalidate>
+        <label for="last_name">Nom</label>
+        <input id="last_name" name="last_name" autocomplete="family-name" placeholder="Ex. TRAORÉ" required minlength="2" />
+
+        <label for="first_name">Prénoms</label>
+        <input id="first_name" name="first_name" autocomplete="given-name" placeholder="Ex. Amara" required minlength="2" />
+
+        <label for="phone">Numéro de téléphone</label>
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ex. 07 00 00 00 00" required />
+        <small>Numéro ivoirien à 10 chiffres.</small>
+
+        <label for="city">Ville / Section</label>
+        <select id="city" name="city" required>
+          <option value="">Sélectionnez votre ville</option>
+          <option value="Bouaké">Bouaké</option>
+          <option value="Yamoussoukro">Yamoussoukro</option>
+          <option value="Abidjan">Abidjan</option>
+        </select>
+
+        <label class="check">
+          <input type="checkbox" id="consent" required />
+          <span>J’accepte que mes informations soient utilisées uniquement pour l’organisation de cette formation.</span>
+        </label>
+
+        <button id="submitBtn" type="submit">Je me préinscris</button>
+      </form>
+
+      <div id="result" class="result" hidden></div>
+    </section>
+
+    <section class="info">
+      <h2>À savoir</h2>
+      <p>La préinscription ne remplace pas la confirmation finale de participation. Si le quota de votre ville est atteint, votre demande sera automatiquement placée sur liste d’attente.</p>
+    </section>
+
+    <footer>Association des Conducteurs de Véhicules de Transport avec Chauffeur de Côte d’Ivoire (ACVTC-CI)</footer>
+  </main>
+
+  <script>
+    const API = 'https://jxunyxingxubryyugwzn.supabase.co/functions/v1/formation-bouake-2026';
+    const form = document.getElementById('registrationForm');
+    const result = document.getElementById('result');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      result.hidden = true;
+      if (!form.reportValidity()) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enregistrement…';
+
+      const payload = {
+        action: 'register',
+        last_name: form.last_name.value,
+        first_name: form.first_name.value,
+        phone: form.phone.value,
+        city: form.city.value,
+      };
+
+      try {
+        const response = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.message || 'Échec de la préinscription.');
+
+        const waiting = data.status === 'attente';
+        result.className = 'result ' + (waiting ? 'waiting' : 'success');
+        result.innerHTML = `
+          <strong>${waiting ? 'Préinscription sur liste d’attente' : 'Préinscription enregistrée ✅'}</strong>
+          <p>${data.message}</p>
+          <div class="ticket">
+            <span>N° d’inscription</span><b>${String(data.registration_number).padStart(3, '0')}</b>
+            <span>Ville</span><b>${data.city}</b>
+          </div>
+          <p class="save">Faites une capture d’écran de cette confirmation.</p>`;
+        result.hidden = false;
+        if (!data.duplicate) form.reset();
+        result.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (error) {
+        result.className = 'result error';
+        result.innerHTML = `<strong>Impossible d’enregistrer</strong><p>${error.message || 'Veuillez réessayer.'}</p>`;
+        result.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Je me préinscris';
+      }
+    });
+  </script>
+</body>
+</html>
