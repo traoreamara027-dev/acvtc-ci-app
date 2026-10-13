@@ -56,7 +56,7 @@ function droits() {
   const membre = role === 'membre';
   const admin = profilActuel?.is_admin === true || (!!profilActuel && !membre);
   const secretariat = profilActuel?.can_manage_minutes === true || president || role.includes('secretaire');
-  const finance = profilActuel?.can_manage_finances === true || president || role.includes('tresor');
+  const finance = [1, 2, 5, 6, 7].includes(Number(profilActuel?.role_id));
   const messages = profilActuel?.can_manage_messages === true || president || role.includes('secretaire') || role.includes('communication');
   const news = profilActuel?.can_manage_news === true || president || role.includes('secretaire') || role.includes('communication');
   return { role, president, membre, admin, secretariat, finance, messages, news };
@@ -1541,62 +1541,7 @@ async function cotisations() {
             PAYER MA COTISATION
           </h3>
 
-          <p>
-            Effectuez votre transfert par
-            <b>Wave</b>
-            ou
-            <b>Orange Money</b>
-            sur le numéro officiel
-            de l'association.
-          </p>
-
-          <div class="form-grid">
-
-            <div>
-              <label>
-                Moyen de paiement
-              </label>
-
-              <select id="pay-method">
-                <option value="WAVE">
-                  Wave
-                </option>
-
-                <option value="ORANGE_MONEY">
-                  Orange Money
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label>
-                Référence de transaction
-              </label>
-
-              <input
-                id="pay-reference"
-                placeholder="Référence reçue après le transfert"
-              >
-            </div>
-
-            <div class="full">
-              <button
-                class="btn btn-primary"
-                onclick="declarerPaiement('${periodIso}')"
-              >
-                J'ai effectué le paiement
-              </button>
-            </div>
-
-          </div>
-
-          <p class="note">
-            Votre paiement restera
-            <b>EN ATTENTE</b>
-            jusqu'à confirmation
-            par le Président
-            ou la Trésorerie.
-          </p>
+          <div id="section-payment-contact">Chargement du numéro du trésorier…</div>
 
         </div>
       `
