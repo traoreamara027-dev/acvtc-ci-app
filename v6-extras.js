@@ -235,86 +235,8 @@
 
   async function paiementsTemporairesV6() {
     const content = $('content');
-    if (!content) return;
-    const finance = droits().finance || droits().admin;
-    content.innerHTML = `<div class="section-title"><h2>Liens de paiement temporaires</h2></div><div class="v6x-card"><h3>Contact Trésorerie</h3><div id="treasury-contact">Chargement…</div></div>${finance?`<div class="v6x-card"><h3>Créer un lien temporaire</h3><p class="v6x-help">Le lien est lié au compte du membre et devient inutilisable dans l’application après ouverture ou expiration. Le fournisseur externe peut toutefois conserver sa propre URL : utilisez de préférence un lien que le prestataire permet aussi d’expirer ou de révoquer.</p><div class="form-grid"><div class="full"><label>Membre bénéficiaire</label><select id="pay-member"><option value="">Chargement…</option></select></div><div><label>Montant (FCFA, facultatif)</label><input id="pay-amount" type="number" min="0" step="1"></div><div><label>Moyen / fournisseur</label><input id="pay-provider" placeholder="Wave, Orange Money…"></div><div class="full"><label>Motif</label><input id="pay-purpose" maxlength="300" placeholder="Cotisation, aide, prestation…"></div><div class="full"><label>Lien HTTPS de paiement</label><input id="pay-url" type="url" placeholder="https://..."></div><div><label>Expiration</label><select id="pay-ttl"><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="60">1 heure</option><option value="360">6 heures</option><option value="1440">24 heures maximum</option></select></div></div><button class="btn btn-primary" onclick="creerLienPaiementV6()">Créer le lien temporaire</button></div><div class="section-title"><h3>Historique administratif</h3></div><div id="payment-admin-list"></div>`:''}<div class="section-title"><h3>Mes liens de paiement</h3></div><div id="payment-my-list"><div class="empty">Chargement…</div></div>`;
-    await chargerContactTresorierV6();
-    if (finance) await chargerMembresPaiementV6();
-    await chargerLiensPaiementV6();
-  }
-
-  async function chargerContactTresorierV6() {
-    const { data, error } = await supabaseClient.rpc('get_treasury_settings_v6');
-    const row = data?.[0];
-    const zone = $('treasury-contact');
-    if (!zone) return;
-    const can = droits().finance || droits().admin;
-    zone.innerHTML = `${row?.treasurer_phone?`<p><b>Numéro officiel : ${esc(row.treasurer_phone)}</b></p>`:'<p class="v6x-help">Aucun numéro officiel enregistré.</p>'}${can?`<div class="v6x-two"><input id="treasurer-phone" inputmode="tel" value="${esc(row?.treasurer_phone||'')}" placeholder="+225..."><button class="btn btn-light" onclick="enregistrerTelephoneTresorierV6()">Mettre à jour</button></div>`:''}`;
-  }
-
-  async function enregistrerTelephoneTresorierV6() {
-    const phone = $('treasurer-phone')?.value.trim();
-    const { error } = await supabaseClient.rpc('set_treasurer_phone_v6', { p_phone:phone });
-    if (error) return toast(error.message || 'Mise à jour impossible.',5000);
-    toast('Numéro de la Trésorerie mis à jour.');
-    await chargerContactTresorierV6();
-  }
-
-  async function chargerMembresPaiementV6() {
-    const select = $('pay-member'); if (!select) return;
-    const { data, error } = await supabaseClient.rpc('list_members_v6_admin');
-    if (error) return select.innerHTML = '<option value="">Impossible de charger les membres</option>';
-    select.innerHTML = '<option value="">Choisir un membre</option>' + (data||[]).filter(m=>m.actif!==false).map(m=>`<option value="${m.id}">${esc(m.nom_complet)} — ${esc(m.numero_membre||'')}</option>`).join('');
-  }
-
-  async function creerLienPaiementV6() {
-    const member = $('pay-member')?.value;
-    const purpose = $('pay-purpose')?.value.trim();
-    const url = $('pay-url')?.value.trim();
-    if (!member || !purpose || !/^https:\/\//i.test(url||'')) return toast('Choisissez le membre, le motif et un lien HTTPS valide.');
-    const raw = $('pay-amount')?.value;
-    const { error } = await supabaseClient.rpc('create_payment_link_v6', {
-      p_member_id:member,
-      p_amount:raw===''?null:Number(raw),
-      p_purpose:purpose,
-      p_provider:$('pay-provider')?.value.trim() || 'Autre',
-      p_external_url:url,
-      p_ttl_minutes:Number($('pay-ttl')?.value || 20)
-    });
-    if (error) return toast(error.message || 'Création impossible.',5000);
-    toast('Lien temporaire créé.');
-    await paiementsTemporairesV6();
-  }
-
-  async function chargerLiensPaiementV6() {
-    const my = $('payment-my-list');
-    const mine = await supabaseClient.rpc('list_my_payment_links_v6');
-    if (my) {
-      if (mine.error) my.innerHTML = `<div class="empty">${esc(mine.error.message)}</div>`;
-      else if (!(mine.data||[]).length) my.innerHTML = '<div class="empty">Aucun lien de paiement disponible.</div>';
-      else my.innerHTML = mine.data.map(l=>`<div class="v6x-card"><div class="v6x-meta"><span class="v6x-pill">${esc(l.provider)}</span><span class="v6x-pill ${l.status==='active'?'ok':l.status==='expired'?'warn':'bad'}">${esc(l.status)}</span></div><h3>${esc(l.purpose)}</h3>${l.amount?`<p><b>${fmt(l.amount)} FCFA</b></p>`:''}<p class="v6x-help">Expire : ${new Date(l.expires_at).toLocaleString('fr-FR')}</p>${l.status==='active'?`<p class="v6x-countdown">Temps restant : ${dureeTexte(l.expires_at)}</p><button class="btn btn-primary" onclick="ouvrirLienPaiementV6('${l.token}')">Ouvrir le paiement</button>`:''}</div>`).join('');
-    }
-    if (droits().finance || droits().admin) {
-      const adminZone = $('payment-admin-list');
-      const admin = await supabaseClient.rpc('list_payment_links_admin_v6');
-      if (adminZone) adminZone.innerHTML = admin.error ? `<div class="empty">${esc(admin.error.message)}</div>` : !(admin.data||[]).length ? '<div class="empty">Aucun lien créé.</div>' : admin.data.map(l=>`<div class="v6x-card"><h4>${esc(l.member_name)}</h4><p>${esc(l.purpose)}${l.amount?` · <b>${fmt(l.amount)} FCFA</b>`:''}</p><div class="v6x-meta"><span class="v6x-pill">${esc(l.provider)}</span><span class="v6x-pill">${esc(l.status)}</span></div><p class="v6x-help">Expiration : ${new Date(l.expires_at).toLocaleString('fr-FR')}</p>${l.status==='active'?`<button class="btn btn-light" onclick="annulerLienPaiementV6('${l.id}')">Annuler ce lien</button>`:''}</div>`).join('');
-    }
-  }
-
-  async function ouvrirLienPaiementV6(token) {
-    if (!confirm('Ouvrir ce lien de paiement ? Il sera marqué comme utilisé immédiatement pour empêcher sa réutilisation dans l’application.')) return;
-    const { data, error } = await supabaseClient.rpc('resolve_payment_link_v6', { p_token:token });
-    if (error || !data) return toast(error?.message || 'Lien expiré ou non autorisé.',5000);
-    window.open(data, '_blank', 'noopener');
-    setTimeout(chargerLiensPaiementV6, 800);
-  }
-
-  async function annulerLienPaiementV6(id) {
-    if (!confirm('Annuler ce lien de paiement ?')) return;
-    const { error } = await supabaseClient.rpc('cancel_payment_link_v6', { p_link_id:id });
-    if (error) return toast(error.message || 'Annulation impossible.',5000);
-    toast('Lien annulé.');
-    await chargerLiensPaiementV6();
+    content.innerHTML = '<div class="section-title"><h2>Paiement des cotisations</h2></div><div class="card"><h3>Trésorier de ma section</h3><div id="section-payment-contact">Chargement…</div></div>';
+    await window.afficherNumeroSectionV6?.();
   }
 
   function ajouterBoutonsNavigation() {
@@ -343,11 +265,6 @@
     window.voterV6 = voterV6;
     window.cloreVoteV6 = cloreVoteV6;
     window.paiementsTemporairesV6 = paiementsTemporairesV6;
-    window.enregistrerTelephoneTresorierV6 = enregistrerTelephoneTresorierV6;
-    window.creerLienPaiementV6 = creerLienPaiementV6;
-    window.chargerLiensPaiementV6 = chargerLiensPaiementV6;
-    window.ouvrirLienPaiementV6 = ouvrirLienPaiementV6;
-    window.annulerLienPaiementV6 = annulerLienPaiementV6;
 
     const ancienneNav = window.afficherNavigation;
     if (typeof ancienneNav === 'function' && !window.__v6ExtraNavWrapped) {
