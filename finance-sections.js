@@ -32,8 +32,21 @@
   window.cotisations = async function () {
     await anciennesCotisations();
     await window.afficherNumeroSectionV6();
+    await window.afficherTarifCotisationV6();
   };
 
+  window.afficherTarifCotisationV6 = async function () {
+    const kpis = document.querySelectorAll('#content .kpi');
+    if (!kpis.length) return;
+    const month = new Date().toISOString().slice(0,7) + '-01';
+    const rep = await supabaseClient.from('monthly_dues_rates_v6').select('amount,penalty,effective_month').lte('effective_month',month).order('effective_month',{ascending:false}).limit(1);
+    if (rep.error || !rep.data?.length || !kpis[0].isConnected) return;
+    const rate = rep.data[0];
+    const due = await supabaseClient.rpc('monthly_due_v5',{p_period:month,p_as_of:new Date().toISOString().slice(0,10)});
+    const current = Array.isArray(due.data) ? due.data[0] : due.data;
+    kpis[0].innerHTML = '<small>Cotisation du mois</small><b>' + fmt(current?.base_amount ?? rate.amount) + '</b><small>Montant reconduit automatiquement</small>';
+    if (kpis[1]) kpis[1].innerHTML = '<small>Pénalité éventuelle</small><b>' + fmt(current?.penalty ?? 0) + '</b><small>Total à payer : ' + fmt(current?.total_amount ?? rate.amount) + '</small>';
+  };
   function summaryHtml(rows) {
     const sum = key => rows.reduce((total, r) => total + Number(r[key]), 0);
     return `<div class="grid"><div class="kpi"><small>Entrées d’argent</small><b>${fmt(sum('income'))}</b></div><div class="kpi"><small>Dépenses</small><b>${fmt(sum('expense'))}</b></div><div class="kpi"><small>Solde disponible</small><b>${fmt(sum('balance'))}</b></div></div>`;
@@ -68,15 +81,37 @@
     summaries = rep.data || [];
     if (!globalRead()) selectedSection = Number(profilActuel.section_id);
     if (selectedSection && !summaries.some(s => Number(s.section_id) === selectedSection)) selectedSection = null;
-    box.innerHTML = `<h2>Caisse et dépenses</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${canEditPaymentNumber() ? `<details><summary>Numéro officiel de paiement</summary><form id="cash-phone-form"><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Ajouter une opération de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="expense">Dépense</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
+    box.innerHTML = `<h2>Caisse nationale</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${canEditPaymentNumber() ? `<details><summary>Numéro officiel de paiement</summary><form id="cash-phone-form"><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Ajouter une opération de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="expense">Dépense</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
+    if (globalWrite()) {
+      const rateBox = document.createElement('details');
+      rateBox.className = 'card';
+      rateBox.innerHTML = '<summary>Montant mensuel des cotisations</summary><form id="dues-rate-form"><label for="dues-month">Mois de prise d’effet</label><input id="dues-month" type="month" required><label for="dues-amount">Cotisation mensuelle (FCFA)</label><input id="dues-amount" type="number" min="1" step="1" required><p class="note">Le montant est reconduit chaque mois jusqu’à modification. Les mois précédents restent inchangés.</p><button class="btn btn-primary" type="submit">Enregistrer le montant</button></form>';
+      box.append(rateBox);
+      const monthInput = $('dues-month');
+      monthInput.value = new Date().toISOString().slice(0,7);
+      monthInput.min = monthInput.value;
+      const existing = await supabaseClient.from('monthly_dues_rates_v6').select('amount').lte('effective_month',monthInput.value+'-01').order('effective_month',{ascending:false}).limit(1);
+      if (existing.data?.length) $('dues-amount').value = existing.data[0].amount;
+      $('dues-rate-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const month = $('dues-month').value, amount = Number($('dues-amount').value);
+        if (month < new Date().toISOString().slice(0,7) || !Number.isSafeInteger(amount) || amount < 1) return toast('Vérifiez le mois et le montant.');
+        const saved = await supabaseClient.from('monthly_dues_rates_v6').upsert({effective_month:month+'-01',amount,penalty:200,updated_at:new Date().toISOString()});
+        if (saved.error) return toast('Modification refusée : '+saved.error.message,6000);
+        toast('Cotisation mensuelle enregistrée.'); await window.finances();
+      });
+    }
     $('cash-phone-form')?.addEventListener('submit', savePhone);
     $('cash-entry-form')?.addEventListener('submit', saveEntry);
     if (write()) {
       const cotis = document.createElement('details');
-      cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member">Membre</label><select id="cash-member" required><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required value="500"><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option><option value="ESPECES">Espèces</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
+      cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member">Membre</label><select id="cash-member" required><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option><option value="ESPECES">Espèces</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
       box.append(cotis);
       $('cash-contribution-form').addEventListener('submit', saveContribution);
       await loadContributionMembers();
+      const rate = await supabaseClient.rpc('monthly_due_v5',{p_period:new Date().toISOString().slice(0,7)+'-01',p_as_of:new Date().toISOString().slice(0,10)});
+      const currentRate = Array.isArray(rate.data) ? rate.data[0] : rate.data;
+      if ($('cash-contribution-amount') && currentRate) $('cash-contribution-amount').value = currentRate.base_amount;
     }
     if (!write()) {
       const history = document.createElement('div'); history.id = 'cash-contributions-read';
