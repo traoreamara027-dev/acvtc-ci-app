@@ -5,6 +5,7 @@
   const fmt = n => Number(n || 0).toLocaleString('fr-FR') + ' FCFA';
   const globalRead = () => [1, 2, 5].includes(Number(profilActuel?.role_id));
   const write = () => [1, 5, 6].includes(Number(profilActuel?.role_id));
+  const canEditPaymentNumber = () => [1, 5].includes(Number(profilActuel?.role_id));
   const globalWrite = () => [1, 5].includes(Number(profilActuel?.role_id));
   let selectedSection = null;
   let summaries = [];
@@ -13,12 +14,12 @@
   window.afficherNumeroSectionV6 = async function () {
     const zone = $('section-payment-contact');
     if (!zone) return;
-    const { data, error } = await supabaseClient.from('section_treasury_v6')
-      .select('treasurer_phone').eq('section_id', profilActuel.section_id).maybeSingle();
+    const { data, error } = await supabaseClient.from('treasury_settings_v6')
+      .select('treasurer_phone').eq('id', 1).maybeSingle();
     if (!zone.isConnected) return;
     if (error) { zone.textContent = 'Impossible de charger le numéro. Réessayez.'; return; }
     const phone = data?.treasurer_phone;
-    zone.innerHTML = phone ? `<p><b>${esc(phone)}</b></p><button class="btn btn-primary" onclick="copierNumeroSectionV6()">Copier le numéro</button>` : '<p>Le trésorier doit encore enregistrer le numéro de cette section.</p>';
+    zone.innerHTML = phone ? `<p><b>${esc(phone)}</b></p><button class="btn btn-primary" onclick="copierNumeroSectionV6()">Copier le numéro</button>` : '<p>Le numéro officiel de paiement n’est pas encore renseigné.</p>';
     zone.dataset.phone = phone || '';
   };
   window.copierNumeroSectionV6 = async function () {
@@ -67,10 +68,9 @@
     summaries = rep.data || [];
     if (!globalRead()) selectedSection = Number(profilActuel.section_id);
     if (selectedSection && !summaries.some(s => Number(s.section_id) === selectedSection)) selectedSection = null;
-    box.innerHTML = `<h2>Caisse et dépenses</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${write() ? `<details><summary>Numéro du trésorier de section</summary><form id="cash-phone-form"><label for="cash-phone-section">Section</label><select id="cash-phone-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === Number(profilActuel.section_id) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Ajouter une opération de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="expense">Dépense</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
+    box.innerHTML = `<h2>Caisse et dépenses</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${canEditPaymentNumber() ? `<details><summary>Numéro officiel de paiement</summary><form id="cash-phone-form"><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Ajouter une opération de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="expense">Dépense</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
     $('cash-phone-form')?.addEventListener('submit', savePhone);
     $('cash-entry-form')?.addEventListener('submit', saveEntry);
-    $('cash-phone-section')?.addEventListener('change', loadPhone);
     if (write()) {
       const cotis = document.createElement('details');
       cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member">Membre</label><select id="cash-member" required><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required value="500"><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option><option value="ESPECES">Espèces</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
@@ -84,7 +84,7 @@
       await loadReadContributions();
     }
     entryPage = 0;
-    await Promise.all([refreshJournal(), write() ? loadPhone() : Promise.resolve()]);
+    await Promise.all([refreshJournal(), canEditPaymentNumber() ? loadPhone() : Promise.resolve()]);
   };
   async function loadContributionMembers() {
     const select = $('cash-member'); if (!select) return;
@@ -111,20 +111,21 @@
   }
   async function loadPhone() {
     const zone = $('cash-phone-current'); if (!zone) return;
-    const section = Number($('cash-phone-section').value);
-    const rep = await supabaseClient.from('section_treasury_v6').select('treasurer_phone').eq('section_id',section).maybeSingle();
-    if (!zone.isConnected || Number($('cash-phone-section')?.value) !== section) return;
+    const rep = await supabaseClient.from('treasury_settings_v6').select('treasurer_phone').eq('id',1).maybeSingle();
+    if (!zone.isConnected) return;
     zone.textContent = rep.error ? 'Numéro indisponible.' : 'Numéro actuel : ' + (rep.data?.treasurer_phone || 'Non renseigné');
     $('cash-phone').value = rep.data?.treasurer_phone || '';
   }
   async function savePhone(e) {
-    e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true;
+    e.preventDefault();
+    if (!canEditPaymentNumber()) return toast('Modification réservée au Président et au Trésorier général.');
+    const button = e.target.querySelector('button'); button.disabled = true;
     try {
       const phone = normaliserTelephone($('cash-phone').value);
       if (!/^\+225[0-9]{10}$/.test(phone)) return toast('Saisissez un numéro ivoirien de 10 chiffres.');
-      const rep = await supabaseClient.from('section_treasury_v6').upsert({section_id:Number($('cash-phone-section').value),treasurer_phone:phone,updated_at:new Date().toISOString()});
+      const rep = await supabaseClient.from('treasury_settings_v6').upsert({id:1,treasurer_phone:phone,updated_at:new Date().toISOString()});
       if (rep.error) return toast('Enregistrement refusé : ' + rep.error.message, 6000);
-      toast('Numéro de la section enregistré.'); await loadPhone();
+      toast('Numéro officiel enregistré.'); await loadPhone();
     } finally { button.disabled = false; }
   }
   async function saveEntry(e) {
