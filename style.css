@@ -79,3 +79,32 @@ textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focu
 .dashboard-finance .kpi b{font-size:16px;overflow-wrap:anywhere}
 .dashboard-finance>.btn{display:none}
 @media(max-width:380px){.dashboard-tile{gap:7px;padding:10px 8px;font-size:12px}.dashboard-tile svg,.dashboard-tile i{width:19px;height:19px;flex-basis:19px}.dashboard-home .hero h2{font-size:19px}.dashboard-finance .kpi b{font-size:13px}}
+
+/* ACVTC-CI V6 — modèle 2 « Institutionnel et élégant » */
+:root{--navy:#102f63;--navy2:#205b9f;--red:#d51f32;--ink:#172a46;--muted:#61728b;--line:#dce5f0;--bg:#f3f6fb;--soft:#eaf1fa;--shadow:0 12px 32px rgba(16,47,99,.10)}
+body{background-color:var(--bg);background-image:linear-gradient(180deg,#eaf1fa 0,#f6f8fc 320px)}
+.app-header{background:linear-gradient(105deg,#0e2c5d,#184a89);border-bottom:4px solid var(--red);box-shadow:0 7px 24px rgba(11,37,81,.16);color:#fff}
+.app-header .app-brand b,.app-header .header-user b{color:#fff}
+.app-header .app-brand small,.app-header .header-user{color:#e4edfb}
+.app-header .app-brand img{background:#fff;border:3px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+.app-header .btn-light{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.36);color:#fff}
+.app-main{max-width:1240px;margin-top:26px}
+.app-nav{padding:8px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 5px 18px rgba(16,47,99,.05)}
+.app-nav button{border-color:transparent;background:transparent;border-radius:10px;color:var(--navy);font-weight:750}
+.app-nav button:hover,.app-nav button.active{background:var(--navy);color:#fff;box-shadow:0 4px 12px rgba(16,47,99,.16)}
+.card{border-radius:20px;border-color:var(--line);box-shadow:0 8px 25px rgba(16,47,99,.06)}
+.card h2,.card h3,.section-title h2,.section-title h3{color:var(--navy);letter-spacing:-.025em}
+.card h2:first-child{padding-bottom:10px;border-bottom:1px solid var(--line)}
+.hero{background:linear-gradient(125deg,#0e2c5d,#2363a7);border-left:5px solid var(--red)}
+.kpi{border-radius:18px;border-top:3px solid #2a69ae;box-shadow:0 6px 18px rgba(16,47,99,.05)}
+.kpi b{color:var(--navy);font-size:clamp(22px,3vw,30px);font-variant-numeric:tabular-nums}
+.kpi small{line-height:1.5}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:#1b4d90}
+.btn-secondary{background:var(--red)}
+.btn:focus-visible,.app-nav button:focus-visible{outline:3px solid #74a7e6;outline-offset:2px}
+.list-item{border-left:3px solid #d5e2f3;box-shadow:0 3px 12px rgba(16,47,99,.03)}
+input:focus,select:focus,textarea:focus{border-color:#2c69ae;box-shadow:0 0 0 3px rgba(44,105,174,.12)}
+details.card summary{cursor:pointer;color:var(--navy);font-weight:800;padding:5px 0}
+details.card[open] summary{padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+@media(max-width:720px){.app-header{min-height:68px}.app-brand b{font-size:17px}.app-main{margin-top:14px}.app-nav{padding:6px;gap:4px}.app-nav button{font-size:12px;padding:10px 7px}.card{border-radius:16px}.kpi{padding:15px}}
