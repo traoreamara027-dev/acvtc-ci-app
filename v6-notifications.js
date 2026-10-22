@@ -174,3 +174,14 @@
   const target=new URLSearchParams(location.search).get('open');
   if(target){ setTimeout(()=>ouvrirCibleNotification(target),1800); }
 })();
+
+// Keep a single compact return control outside the dashboard.
+(function () {
+  const content = document.getElementById('content');
+  const back = document.getElementById('dashboard-back');
+  if (!content || !back) return;
+  const sync = () => { back.hidden = !!content.querySelector('.dashboard-home'); };
+  new MutationObserver(sync).observe(content, {childList:true});
+  sync();
+  if (profilActuel && content.querySelector('.dashboard-home')) window.accueil();
+})();

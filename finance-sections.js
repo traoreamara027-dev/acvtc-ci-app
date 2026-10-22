@@ -43,9 +43,11 @@
     if (!droits().finance) return;
     const content = $('content');
     const box = document.createElement('div');
-    box.className = 'card'; box.style.marginTop = '16px';
+    box.className = 'card dashboard-finance';
     box.innerHTML = '<h3>Résumé financier</h3><p>Chargement…</p>';
-    content.prepend(box);
+    const home = content.querySelector('.dashboard-home');
+    if (!home) return;
+    home.querySelector('.hero').after(box);
     const { data, error } = await supabaseClient.rpc('finance_summary_v6');
     if (!box.isConnected) return;
     box.innerHTML = '<h3>Résumé financier — ' + esc(globalRead() ? 'Toutes les sections' : nomSection(profilActuel.section_id)) + '</h3>' + (error ? '<p>Résumé indisponible. Réessayez.</p>' : summaryHtml(data || [])) + '<button class="btn btn-light" onclick="finances()">Consulter les finances</button>';
