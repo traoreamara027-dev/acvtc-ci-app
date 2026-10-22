@@ -9,7 +9,7 @@
   <link rel="icon" href="/icon-192.png">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="stylesheet" href="/style.css">
-  <title>ACVTC-CI V5</title>
+  <title>ACVTC-CI V6</title>
 </head>
 
 <body>
@@ -236,10 +236,7 @@
             ACVTC-CI
           </b>
 
-          <small>
-            On travaille aujourd'hui
-            pour le bonheur de demain.
-          </small>
+          <small>Tableau de bord</small>
 
         </div>
 
@@ -271,7 +268,10 @@
       <nav
         id="nav"
         class="app-nav"
+        aria-label="Rubriques disponibles"
       ></nav>
+
+      <button id="dashboard-back" class="btn btn-light dashboard-back" onclick="accueil()" hidden>← Tableau de bord</button>
 
       <section
         id="content"
@@ -290,8 +290,9 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <script src="/app.js?v=20261013-finance"></script>
-  <script src="/modules-v51.js?v=20261013-finance"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="/app.js?v=20261022-dashboard"></script>
+  <script src="/modules-v51.js?v=20261022-dashboard"></script>
 
 
   <!-- CORRECTIF V5 : AUTHENTIFICATION E-MAIL -->

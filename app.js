@@ -453,216 +453,32 @@ function afficherNavigation() {
 }
 
 async function accueil() {
-  const content =
-    document.getElementById(
-      'content'
-    );
-
-  const d = droits();
-
-  content.innerHTML = `
-    <div class="card hero">
-
-      <h2>
-        Bienvenue,
-        ${echapperHtml(
-          nomComplet()
-        )}
-      </h2>
-
-      <p>
-        ${echapperHtml(
-          profilActuel.role_nom ||
-          nomRole(
-            profilActuel.role_id
-          )
-        )}
-        ·
-        ${echapperHtml(
-          profilActuel.section_nom ||
-          nomSection(
-            profilActuel.section_id
-          )
-        )}
-      </p>
-
-      <span class="badge badge-green">
-        ● Compte actif
-      </span>
-
-    </div>
-
-    <div class="section-title">
-      <h2>Mon espace</h2>
-    </div>
-
-    <div class="grid dashboard-grid">
-
-      <button
-        class="quick navy"
-        onclick="messages()"
-      >
-        <span class="icon">📢</span>
-        <b>Messages aux conducteurs</b>
-        <small>
-          Réunions, convocations
-          et informations.
-        </small>
-      </button>
-
-      <button
-        class="quick red"
-        onclick="actualites()"
-      >
-        <span class="icon">🌍</span>
-        <b>Actualités VTC</b>
-        <small>
-          Côte d'Ivoire et monde.
-        </small>
-      </button>
-
-      <button
-        class="quick"
-        onclick="maCarte()"
-      >
-        <span class="icon">🪪</span>
-        <b>Ma carte</b>
-        <small>
-          Photo et QR
-          de vérification.
-        </small>
-      </button>
-
-      <button
-        class="quick"
-        onclick="cotisations()"
-      >
-        <span class="icon">💳</span>
-        <b>Cotisations</b>
-        <small>
-          500 FCFA /
-          700 FCFA après retard.
-        </small>
-      </button>
-
-      <button class="quick" onclick="suggestions()">
-        <span class="icon">💡</span>
-        <b>Suggestions</b>
-        <small>Proposer une amélioration ou faire une remarque.</small>
-      </button>
-
-      <button class="quick navy" onclick="conseilJuridique()">
-        <span class="icon">⚖️</span>
-        <b>Conseil juridique</b>
-        <small>Recevoir une première orientation adaptée à votre situation.</small>
-      </button>
-
-      <button class="quick" onclick="agenda()">
-        <span class="icon">📅</span>
-        <b>Agenda</b>
-        <small>Consulter les prochains événements de l'association.</small>
-      </button>
-
-      ${
-        d.admin
-        ?
-        `
-        <button
-          class="quick"
-          onclick="membres()"
-        >
-          <span class="icon">👥</span>
-          <b>Membres</b>
-          <small>
-            Ajouter et consulter
-            les membres.
-          </small>
-        </button>
-        `
-        :
-        ''
-      }
-
-      ${
-        d.secretariat
-        ?
-        `
-        <button
-          class="quick"
-          onclick="procesVerbaux()"
-        >
-          <span class="icon">📁</span>
-          <b>Secrétariat / PV</b>
-          <small>
-            Archivage des
-            procès-verbaux.
-          </small>
-        </button>
-        `
-        :
-        ''
-      }
-
-      ${
-        d.finance
-        ?
-        `
-        <button
-          class="quick"
-          onclick="finances()"
-        >
-          <span class="icon">📊</span>
-          <b>Finances</b>
-          <small>
-            Suivi financier
-            de l'association.
-          </small>
-        </button>
-        `
-        :
-        ''
-      }
-
-    </div>
-
-    <div class="section-title">
-      <h2>Informations importantes</h2>
-    </div>
-
-    <div
-      id="home-messages"
-      class="list"
-    >
-      <div class="empty">
-        Chargement...
-      </div>
-    </div>
-
-    <div class="section-title">
-      <h2>Dernières actualités VTC</h2>
-
-      <button
-        class="btn btn-light btn-small"
-        onclick="actualites()"
-      >
-        Voir tout
-      </button>
-    </div>
-
-    <div
-      id="home-news"
-      class="list"
-    >
-      <div class="empty">
-        Chargement...
-      </div>
-    </div>
-  `;
-
-  await Promise.all([
-    chargerMessagesAccueil(),
-    chargerActualitesAccueil()
-  ]);
+  const content = document.getElementById('content');
+  afficherNavigation();
+  const order = ['Messages', 'Actualités', 'Ma carte', 'Cotisations', 'Suggestions', 'Conseil juridique', 'Agenda', 'Membres', 'Pilotage', 'PV', 'Finances', 'Aides sociales', 'Votes & sondages', 'Paiements', 'Notifications'];
+  const labels = { 'Actualités': 'Actualités VTC', 'PV': 'Procès-verbaux', 'Votes & sondages': 'Votes et sondages' };
+  const icons = ['megaphone', 'globe', 'contact', 'credit-card', 'lightbulb', 'scale', 'calendar-days', 'users', 'chart-column', 'file-text', 'wallet', 'hand-heart', 'vote', 'receipt', 'bell'];
+  const sources = [...document.querySelectorAll('#nav button')];
+  if (typeof window.centreNotificationsV6 === 'function' && !sources.some(b => b.dataset.v6Notifications)) {
+    const notification = document.createElement('button');
+    notification.textContent = 'Notifications';
+    notification.onclick = () => window.centreNotificationsV6();
+    sources.push(notification);
+  }
+  const entries = order.map((label, i) => ({ label, icon: icons[i], source: sources.find(b => b.textContent.replace(/🔔|\s*\(\d+\)/g, '').trim() === label) })).filter(e => e.source);
+  content.innerHTML = `<div class="dashboard-home">
+    <div class="card hero"><h2>Bonjour, ${echapperHtml(nomComplet())}</h2><p>${echapperHtml(profilActuel.role_nom || nomRole(profilActuel.role_id))} · ${echapperHtml(profilActuel.section_nom || nomSection(profilActuel.section_id))}</p><span class="badge badge-green">● Compte actif</span></div>
+    <div class="section-title"><h2>Mes rubriques</h2></div><div class="dashboard-compact-grid"></div></div>`;
+  const grid = content.querySelector('.dashboard-compact-grid');
+  entries.forEach((entry, i) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'dashboard-tile ' + ['navy', 'red', 'white'][i % 3];
+    button.innerHTML = `<i data-lucide="${entry.icon}" aria-hidden="true"></i><span>${echapperHtml(labels[entry.label] || entry.label)}</span><span class="tile-arrow" aria-hidden="true">›</span>`;
+    button.onclick = () => entry.source.click();
+    grid.appendChild(button);
+  });
+  window.lucide?.createIcons();
 }
 
 async function chargerMessagesAccueil() {

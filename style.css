@@ -52,3 +52,30 @@ textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focu
 .verify-person{display:grid;gap:12px;justify-items:center}.verify-person img{width:130px;height:150px;object-fit:cover;border-radius:18px;border:1px solid var(--line)}
 @media(max-width:720px){
   .app-brand small{display:none}.header-user{display:none}.app-header{padding:8px 12px}.app-main{margin-top:14px;padding:0 12px 32px}.app-nav{display:grid;grid-template-columns:repeat(3,1fr)}.app-nav button{font-size:12px;padding:9px 6px}.form-grid{grid-template-columns:1fr}.member-card-body{grid-template-columns:1fr;justify-items:center;text-align:center}.member-card-foot{flex-direction:column}.profile-photo,.photo-placeholder{width:150px}.auth-shell{padding:12px}.auth-card{padding:18px;border-radius:20px}.brand-lockup{align-items:flex-start}.auth-logo{width:78px;height:78px}.brand-lockup h1{font-size:22px}.dashboard-grid{grid-template-columns:repeat(2,1fr)}.quick{min-height:105px}.list-item{flex-direction:column}.list-actions{justify-content:flex-start}.card-actions{flex-direction:column}}
+
+/* Tableau de bord V6 validé : menu unique et rubriques compactes. */
+#nav.app-nav{display:none}
+.dashboard-back{margin-bottom:14px}
+.dashboard-back[hidden]{display:none}
+.app-brand small{display:block}
+.dashboard-home{max-width:900px;margin:auto}
+.dashboard-home .hero{padding:18px 20px;box-shadow:none}
+.dashboard-home .hero h2{font-size:22px}
+.dashboard-home .hero p{font-size:14px;margin-bottom:10px}
+.dashboard-compact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dashboard-tile{display:flex;align-items:center;gap:10px;min-width:0;min-height:60px;padding:12px;border-radius:12px;border:1px solid var(--line);background:white;color:var(--navy);text-align:left;font-size:14px;font-weight:650}
+.dashboard-tile.navy{background:linear-gradient(120deg,var(--navy),var(--navy2));color:white;border-color:transparent}
+.dashboard-tile.red{background:linear-gradient(120deg,#df1025,#f52a3a);color:white;border-color:transparent}
+.dashboard-tile svg,.dashboard-tile i{width:22px;height:22px;flex:0 0 22px}
+.dashboard-tile>span:not(.tile-arrow){flex:1;overflow-wrap:anywhere}
+.dashboard-tile .tile-arrow{font-size:22px;font-weight:400}
+.dashboard-tile:focus-visible,.dashboard-back:focus-visible{outline:3px solid #6998d0;outline-offset:3px}
+.dashboard-finance{margin-top:12px;padding:12px;box-shadow:none}
+.dashboard-finance h3{margin:0 0 10px;font-size:13px;color:var(--muted)}
+.dashboard-finance .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.dashboard-finance .kpi{padding:4px 6px;border:0;border-radius:0;min-width:0}
+.dashboard-finance .kpi+.kpi{border-left:1px solid var(--line)}
+.dashboard-finance .kpi small{font-size:11px}
+.dashboard-finance .kpi b{font-size:16px;overflow-wrap:anywhere}
+.dashboard-finance>.btn{display:none}
+@media(max-width:380px){.dashboard-tile{gap:7px;padding:10px 8px;font-size:12px}.dashboard-tile svg,.dashboard-tile i{width:19px;height:19px;flex-basis:19px}.dashboard-home .hero h2{font-size:19px}.dashboard-finance .kpi b{font-size:13px}}
