@@ -4,7 +4,7 @@
     if (document.getElementById('acvtc-v6-notifications-script')) return;
     const notif = document.createElement('script');
     notif.id = 'acvtc-v6-notifications-script';
-    notif.src = '/v6-notifications.js?v=20261022-dashboard';
+    notif.src = '/v6-notifications.js?v=20261024-payment';
     notif.async = false;
     document.body.appendChild(notif);
   }
@@ -16,11 +16,11 @@
     }
     const extra = document.createElement('script');
     extra.id = 'acvtc-v6-extras-script';
-    extra.src = '/v6-extras.js?v=20261022-dashboard';
+    extra.src = '/v6-extras.js?v=20261024-payment';
     extra.async = false;
     extra.onload = function () {
       const finance = document.createElement('script');
-      finance.src = '/finance-sections.js?v=20261022-dashboard';
+      finance.src = '/finance-sections.js?v=20261024-payment';
       finance.onload = chargerNotifications;
       document.body.appendChild(finance);
     };
@@ -34,7 +34,7 @@
     }
     const script = document.createElement('script');
     script.id = 'acvtc-v6-script';
-    script.src = '/v6.js?v=20261022-dashboard';
+    script.src = '/v6.js?v=20261024-payment';
     script.async = false;
     script.onload = chargerExtras;
     document.body.appendChild(script);

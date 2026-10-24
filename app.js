@@ -1319,7 +1319,7 @@ async function cotisations() {
 
   content.innerHTML = `
     <div class="section-title">
-      <h2>Mes cotisations</h2>
+      <h2>Payer ma cotisation</h2>
     </div>
 
     <div class="grid">
@@ -1328,18 +1328,16 @@ async function cotisations() {
         <small>Cotisation du mois</small>
         <b>
           ${Number(
-            due.total_amount ||
+            due.total_amount ??
             500
           )} FCFA
         </b>
       </div>
 
       <div class="kpi">
-        <small>Règle</small>
-        <b>
-          500 + 200 FCFA
-          après 2 semaines
-        </b>
+        <small>Pénalité éventuelle</small>
+        <b>${Number(due.penalty || 0)} FCFA</b>
+        <small>Incluse dans le montant à payer</small>
       </div>
 
     </div>
@@ -1353,11 +1351,23 @@ async function cotisations() {
           style="margin-top:14px"
         >
 
-          <h3>
-            PAYER MA COTISATION
-          </h3>
-
-          <div id="section-payment-contact">Chargement du numéro du trésorier…</div>
+          <h3>1. Envoyer le paiement</h3>
+          <p>Trésorerie nationale — numéro unique du Trésorier général.</p>
+          <div id="section-payment-contact" aria-live="polite">Chargement du numéro du trésorier…</div>
+          <div id="payment-number-settings"></div>
+          <h3>2. Déclarer mon versement</h3>
+          <p class="note">Effectuez d’abord le transfert dans votre application de paiement. Cette déclaration ne prélève pas d’argent ; elle sera vérifiée par la trésorerie.</p>
+          <form id="payment-declaration-form">
+            <label for="pay-period">Mois de cotisation</label>
+            <input id="pay-period" type="month" required value="${periodIso.slice(0,7)}">
+            <p id="pay-due" aria-live="polite">Montant à envoyer : ${Number(due.total_amount)} FCFA</p>
+            <label for="pay-method">Moyen utilisé</label>
+            <select id="pay-method" required><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option></select>
+            <label for="pay-reference">Référence de la transaction</label>
+            <input id="pay-reference" required maxlength="200" autocomplete="off" placeholder="Référence reçue après le transfert">
+            <button id="pay-submit" type="submit" class="btn btn-primary" disabled>J’ai payé — déclarer mon versement</button>
+            <p id="pay-status" aria-live="polite"></p>
+          </form>
 
         </div>
       `
@@ -1375,6 +1385,7 @@ async function cotisations() {
       `
     }
 
+    <h3>Historique de mes cotisations</h3>
     <div
       id="cotis-list"
       class="list"
@@ -1385,6 +1396,12 @@ async function cotisations() {
       </div>
     </div>
   `;
+
+  document.getElementById('payment-declaration-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    await declarerPaiement(document.getElementById('pay-period').value + '-01');
+  });
+  document.getElementById('pay-period')?.addEventListener('change', () => window.actualiserMontantPaiementV6?.());
 
   const z =
     document.getElementById(
@@ -1709,38 +1726,24 @@ async function declarerPaiement(
     return;
   }
 
-  const { error } =
-    await supabaseClient.rpc(
-      'declare_payment_v5',
-      {
-        p_period:
-          periodIso,
-
-        p_payment_method:
-          method,
-
-        p_transaction_reference:
-          reference
-      }
-    );
-
-  if (error) {
-
-    console.error(error);
-
-    toast(
-      error.message ||
-      'Déclaration impossible.'
-    );
-
-    return;
+  const button = document.getElementById('pay-submit');
+  if (button?.disabled) return;
+  if (!/^\d{4}-\d{2}-01$/.test(periodIso) || !['WAVE', 'ORANGE_MONEY'].includes(method)) return toast('Vérifiez le mois et le moyen de paiement.');
+  if (button) button.disabled = true;
+  try {
+    const { error } = await supabaseClient.rpc('declare_payment_v5', {
+      p_period: periodIso,
+      p_payment_method: method,
+      p_transaction_reference: reference
+    });
+    if (error) throw error;
+    toast('Paiement déclaré. Il est maintenant en attente de validation.');
+    await cotisations();
+  } catch (error) {
+    toast(error.message || 'Déclaration impossible. Réessayez.', 6000);
+  } finally {
+    if (button?.isConnected) button.disabled = false;
   }
-
-  toast(
-    'Paiement déclaré. Il est maintenant en attente de validation.'
-  );
-
-  await cotisations();
 }
 
 async function membres() {

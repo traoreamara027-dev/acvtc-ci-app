@@ -234,9 +234,7 @@
   }
 
   async function paiementsTemporairesV6() {
-    const content = $('content');
-    content.innerHTML = '<div class="section-title"><h2>Paiement des cotisations</h2></div><div class="card"><h3>Trésorier de ma section</h3><div id="section-payment-contact">Chargement…</div></div>';
-    await window.afficherNumeroSectionV6?.();
+    return window.cotisations();
   }
 
   function ajouterBoutonsNavigation() {
@@ -248,7 +246,7 @@
     };
     add('Aides sociales', aidesSocialesV6, 'social');
     add('Votes & sondages', votesSondagesV6, 'polls');
-    add('Paiements', paiementsTemporairesV6, 'payments');
+    nav.querySelector('[data-v6x="payments"]')?.remove();
   }
 
   function installer() {

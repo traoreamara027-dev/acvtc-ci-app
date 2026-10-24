@@ -17,7 +17,7 @@
     const { data, error } = await supabaseClient.from('treasury_settings_v6')
       .select('treasurer_phone').eq('id', 1).maybeSingle();
     if (!zone.isConnected) return;
-    if (error) { zone.textContent = 'Impossible de charger le numéro. Réessayez.'; return; }
+    if (error) { zone.dataset.phone = ''; zone.innerHTML = '<p>Impossible de charger le numéro.</p><button class="btn btn-light" onclick="afficherNumeroSectionV6()">Réessayer</button>'; return; }
     const phone = data?.treasurer_phone;
     zone.innerHTML = phone ? `<p><b>${esc(phone)}</b></p><button class="btn btn-primary" onclick="copierNumeroSectionV6()">Copier le numéro</button>` : '<p>Le numéro officiel de paiement n’est pas encore renseigné.</p>';
     zone.dataset.phone = phone || '';
@@ -33,6 +33,42 @@
     await anciennesCotisations();
     await window.afficherNumeroSectionV6();
     await window.afficherTarifCotisationV6();
+    await installerNumeroPaiement($('payment-number-settings'));
+    await window.actualiserMontantPaiementV6();
+  };
+
+  async function installerNumeroPaiement(container) {
+    if (!container || !canEditPaymentNumber()) return;
+    container.innerHTML = '<details open><summary>Configurer le numéro du Trésorier général</summary><form id="cash-phone-form"><label for="cash-phone">Numéro officiel unique</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><p class="note">Modification réservée au Président et au Trésorier général.</p><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current" aria-live="polite"></p></form></details>';
+    $('cash-phone-form').addEventListener('submit', savePhone);
+    await loadPhone();
+  }
+
+  let paymentQuoteVersion = 0;
+  window.actualiserMontantPaiementV6 = async function () {
+    const version = ++paymentQuoteVersion;
+    const input = $('pay-period'), status = $('pay-status'), dueZone = $('pay-due'), button = $('pay-submit');
+    if (!input || !status || !dueZone || !button) return;
+    button.disabled = true;
+    const period = input.value + '-01';
+    if (!/^\d{4}-\d{2}-01$/.test(period)) { dueZone.textContent = 'Choisissez un mois valide.'; return; }
+    const [due, confirmed, declared] = await Promise.all([
+      supabaseClient.rpc('monthly_due_v5', {p_period:period,p_as_of:new Date().toISOString().slice(0,10)}),
+      supabaseClient.from('contributions_v5').select('status').eq('member_id',profilActuel.id).eq('period',period),
+      supabaseClient.from('payment_declarations_v5').select('status').eq('member_id',profilActuel.id).eq('period',period)
+    ]);
+    if (version !== paymentQuoteVersion || !input.isConnected) return;
+    const quote = Array.isArray(due.data) ? due.data[0] : due.data;
+    if (due.error || confirmed.error || declared.error || !quote) {
+      dueZone.innerHTML = 'Vérification indisponible. <button type="button" class="btn btn-light" onclick="actualiserMontantPaiementV6()">Réessayer</button>';
+      status.textContent = 'Réessayez avant de déclarer votre versement.';
+      return;
+    }
+    dueZone.textContent = 'Montant à envoyer : ' + fmt(quote.total_amount) + ' (cotisation : ' + fmt(quote.base_amount) + ', pénalité : ' + fmt(quote.penalty) + ').';
+    const paid = (confirmed.data || []).some(c => ['paye','confirmed'].includes(sansAccent(c.status))) || (declared.data || []).some(c => c.status === 'CONFIRMED');
+    const pending = (declared.data || []).some(c => c.status === 'PENDING');
+    status.textContent = paid ? 'Cette cotisation est déjà confirmée.' : pending ? 'Votre versement est en attente de validation. Ne payez pas une deuxième fois.' : '';
+    button.disabled = paid || pending;
   };
 
   window.afficherTarifCotisationV6 = async function () {
@@ -44,7 +80,7 @@
     const rate = rep.data[0];
     const due = await supabaseClient.rpc('monthly_due_v5',{p_period:month,p_as_of:new Date().toISOString().slice(0,10)});
     const current = Array.isArray(due.data) ? due.data[0] : due.data;
-    kpis[0].innerHTML = '<small>Cotisation du mois</small><b>' + fmt(current?.base_amount ?? rate.amount) + '</b><small>Montant reconduit automatiquement</small>';
+    kpis[0].innerHTML = '<small>Montant à payer ce mois</small><b>' + fmt(current?.total_amount ?? rate.amount) + '</b><small>Montant reconduit automatiquement</small>';
     if (kpis[1]) kpis[1].innerHTML = '<small>Pénalité éventuelle</small><b>' + fmt(current?.penalty ?? 0) + '</b><small>Total à payer : ' + fmt(current?.total_amount ?? rate.amount) + '</small>';
   };
   function summaryHtml(rows) {
@@ -160,8 +196,8 @@
       if (!/^\+225[0-9]{10}$/.test(phone)) return toast('Saisissez un numéro ivoirien de 10 chiffres.');
       const rep = await supabaseClient.from('treasury_settings_v6').upsert({id:1,treasurer_phone:phone,updated_at:new Date().toISOString()});
       if (rep.error) return toast('Enregistrement refusé : ' + rep.error.message, 6000);
-      toast('Numéro officiel enregistré.'); await loadPhone();
-    } finally { button.disabled = false; }
+      toast('Numéro officiel enregistré.'); await loadPhone(); await window.afficherNumeroSectionV6();
+    } catch (error) { toast(error.message || 'Enregistrement impossible. Réessayez.', 6000); } finally { if (button.isConnected) button.disabled = false; }
   }
   async function saveEntry(e) {
     e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true;
