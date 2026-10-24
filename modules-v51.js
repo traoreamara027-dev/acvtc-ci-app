@@ -4,7 +4,7 @@
     if (document.getElementById('acvtc-v6-notifications-script')) return;
     const notif = document.createElement('script');
     notif.id = 'acvtc-v6-notifications-script';
-    notif.src = '/v6-notifications.js?v=20261024-payment';
+    notif.src = '/v6-notifications.js?v=20261024-v7';
     notif.async = false;
     document.body.appendChild(notif);
   }
@@ -16,12 +16,17 @@
     }
     const extra = document.createElement('script');
     extra.id = 'acvtc-v6-extras-script';
-    extra.src = '/v6-extras.js?v=20261024-payment';
+    extra.src = '/v6-extras.js?v=20261024-v7';
     extra.async = false;
     extra.onload = function () {
       const finance = document.createElement('script');
-      finance.src = '/finance-sections.js?v=20261024-payment';
-      finance.onload = chargerNotifications;
+      finance.src = '/finance-sections.js?v=20261024-v7';
+      finance.onload = function () {
+        const v7 = document.createElement('script');
+        v7.src = '/v7.js?v=20261024-v7';
+        v7.onload = chargerNotifications;
+        document.body.appendChild(v7);
+      };
       document.body.appendChild(finance);
     };
     document.body.appendChild(extra);
@@ -34,7 +39,7 @@
     }
     const script = document.createElement('script');
     script.id = 'acvtc-v6-script';
-    script.src = '/v6.js?v=20261024-payment';
+    script.src = '/v6.js?v=20261024-v7';
     script.async = false;
     script.onload = chargerExtras;
     document.body.appendChild(script);

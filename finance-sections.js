@@ -107,7 +107,10 @@
   window.finances = async function () {
     if (!droits().finance) return toast('Accès financier non autorisé.');
     const content = $('content');
-    if (write()) await anciennesFinances();
+    if (write()) {
+      await anciennesFinances();
+      content.querySelector('.grid')?.remove();
+    }
     else content.innerHTML = '<div class="section-title"><h2>Finances ACVTC-CI</h2></div>';
     const box = document.createElement('div'); box.id = 'cash-section-panel'; box.className = 'card';
     box.innerHTML = '<h2>Caisse et dépenses</h2><p>Chargement…</p>'; content.prepend(box);
@@ -141,7 +144,8 @@
     $('cash-entry-form')?.addEventListener('submit', saveEntry);
     if (write()) {
       const cotis = document.createElement('details');
-      cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member">Membre</label><select id="cash-member" required><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option><option value="ESPECES">Espèces</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
+      cotis.open = true;
+      cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member">Membre</label><select id="cash-member" required><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="ESPECES">Espèces — remise en main propre</option><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
       box.append(cotis);
       $('cash-contribution-form').addEventListener('submit', saveContribution);
       await loadContributionMembers();
@@ -169,6 +173,14 @@
   async function saveContribution(e) {
     e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true;
     try {
+      const memberId=$('cash-member').value, period=$('cash-period').value+'-01';
+      const [existing,pending]=await Promise.all([
+        supabaseClient.from('contributions_v5').select('status').eq('member_id',memberId).eq('period',period).maybeSingle(),
+        supabaseClient.from('payment_declarations_v5').select('id').eq('member_id',memberId).eq('period',period).eq('status','PENDING').limit(1)
+      ]);
+      if(existing.error||pending.error)return toast('Vérification indisponible. Réessayez avant d’enregistrer.');
+      if(existing.data?.status==='payé')return toast('Cette cotisation est déjà confirmée. Aucun doublon ajouté.');
+      if(pending.data?.length)return toast('Un versement est déjà déclaré pour ce mois. Vérifiez-le dans les paiements en attente.');
       const rep = await supabaseClient.rpc('record_contribution_v5', {p_member_id:$('cash-member').value,p_period:$('cash-period').value+'-01',p_amount:Number($('cash-contribution-amount').value),p_penalty:Number($('cash-penalty').value),p_status:'payé',p_payment_method:$('cash-method').value});
       if (rep.error) return toast('Cotisation refusée : '+rep.error.message,6000);
       toast('Cotisation confirmée et intégrée au solde.'); await window.finances();

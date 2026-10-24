@@ -1,8 +1,15 @@
-const CACHE='acvtc-v6-10';
-const ASSETS=['/','/index.html','/style.css','/app.js?v=20261024-payment','/modules-v51.js?v=20261024-payment','/v6.js?v=20261024-payment','/v6-extras.js?v=20261024-payment','/finance-sections.js?v=20261024-payment','/v6-notifications.js?v=20261024-payment','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json'];
+const CACHE='acvtc-v7-1';
+const ASSETS=['/','/index.html','/style.css','/app.js?v=20261024-v7','/modules-v51.js?v=20261024-v7','/v6.js?v=20261024-v7','/v6-extras.js?v=20261024-v7','/finance-sections.js?v=20261024-v7','/v6-notifications.js?v=20261024-v7','/v7.js?v=20261024-v7','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))])));
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(CACHE).then(cache=>cache.put(e.request,c));return r;}).catch(()=>caches.match(e.request)))});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const url=new URL(e.request.url);
+  // Never retain personal data, authenticated requests or APIs in shared device caches.
+  if(url.origin!==self.location.origin || url.pathname.startsWith('/api/') || e.request.headers.has('authorization'))return;
+  if(!ASSETS.some(a=>new URL(a,self.location.origin).href===url.href))return;
+  e.respondWith(fetch(e.request).then(r=>{if(r.ok){const c=r.clone();caches.open(CACHE).then(cache=>cache.put(e.request,c));}return r;}).catch(()=>caches.match(e.request)));
+});
 self.addEventListener('push',event=>{
   let data={};
   try{data=event.data?event.data.json():{};}catch(e){data={title:'ACVTC-CI',body:'Une nouvelle information est disponible.'};}
