@@ -1,5 +1,5 @@
-const CACHE='acvtc-v7-1';
-const ASSETS=['/','/index.html','/style.css','/app.js?v=20261024-v7','/modules-v51.js?v=20261024-v7','/v6.js?v=20261024-v7','/v6-extras.js?v=20261024-v7','/finance-sections.js?v=20261024-v7','/v6-notifications.js?v=20261024-v7','/v7.js?v=20261024-v7','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json'];
+const CACHE='acvtc-v7-2';
+const ASSETS=['/','/index.html','/style.css','/app.js?v=20261101-v7-president','/modules-v51.js?v=20261101-v7-expenses','/v6.js?v=20261024-v7','/v6-extras.js?v=20261024-v7','/finance-sections.js?v=20261101-v7-expenses','/v6-notifications.js?v=20261024-v7','/v7.js?v=20261024-v7','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))])));
 self.addEventListener('fetch',e=>{
