@@ -50,6 +50,22 @@ function nomComplet(p = profilActuel) {
   return p.nom_complet || [p.prenoms, p.nom].filter(Boolean).join(' ') || 'Membre ACVTC-CI';
 }
 
+// V7 : le Président dirige le bureau national, et non la seule section d'Abidjan.
+function libelleRoleProfil(p = profilActuel) {
+  const role = p?.role_nom || nomRole(p?.role_id);
+  const roleNormalise = sansAccent(role);
+  if (roleNormalise === 'president' || roleNormalise === 'president national' || Number(p?.role_id) === 1) {
+    return 'Président national';
+  }
+  return role;
+}
+
+function libelleRoleEtSection(p = profilActuel) {
+  const role = libelleRoleProfil(p);
+  if (role === 'Président national') return role;
+  return `${role} · ${p?.section_nom || nomSection(p?.section_id)}`;
+}
+
 function droits() {
   const role = sansAccent(profilActuel?.role_nom || nomRole(profilActuel?.role_id));
   const president = profilActuel?.can_manage_admins === true || role === 'president';
@@ -384,17 +400,7 @@ function afficherApplication() {
   if (hu) {
     hu.innerHTML = `
       <b>${echapperHtml(nomComplet())}</b>
-      <span>
-        ${echapperHtml(
-          profilActuel.role_nom ||
-          nomRole(profilActuel.role_id)
-        )}
-        ·
-        ${echapperHtml(
-          profilActuel.section_nom ||
-          nomSection(profilActuel.section_id)
-        )}
-      </span>
+      <span>${echapperHtml(libelleRoleEtSection())}</span>
     `;
   }
 
@@ -467,7 +473,7 @@ async function accueil() {
   }
   const entries = order.map((label, i) => ({ label, icon: icons[i], source: sources.find(b => b.textContent.replace(/🔔|\s*\(\d+\)/g, '').trim() === label) })).filter(e => e.source);
   content.innerHTML = `<div class="dashboard-home">
-    <div class="card hero"><h2>Bonjour, ${echapperHtml(nomComplet())}</h2><p>${echapperHtml(profilActuel.role_nom || nomRole(profilActuel.role_id))} · ${echapperHtml(profilActuel.section_nom || nomSection(profilActuel.section_id))}</p><span class="badge badge-green">● Compte actif</span></div>
+    <div class="card hero"><h2>Bonjour, ${echapperHtml(nomComplet())}</h2><p>${echapperHtml(libelleRoleEtSection())}</p><span class="badge badge-green">● Compte actif</span></div>
     <div class="section-title"><h2>Mes rubriques</h2></div><div class="dashboard-compact-grid"></div></div>`;
   const grid = content.querySelector('.dashboard-compact-grid');
   entries.forEach((entry, i) => {
@@ -982,12 +988,7 @@ async function maCarte() {
 
           <p>
             <b>Rôle :</b>
-            ${echapperHtml(
-              profilActuel.role_nom ||
-              nomRole(
-                profilActuel.role_id
-              )
-            )}
+            ${echapperHtml(libelleRoleProfil())}
           </p>
 
           <p class="note">
