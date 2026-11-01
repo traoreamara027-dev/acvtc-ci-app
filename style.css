@@ -108,3 +108,14 @@ input:focus,select:focus,textarea:focus{border-color:#2c69ae;box-shadow:0 0 0 3p
 details.card summary{cursor:pointer;color:var(--navy);font-weight:800;padding:5px 0}
 details.card[open] summary{padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
 @media(max-width:720px){.app-header{min-height:68px}.app-brand b{font-size:17px}.app-main{margin-top:14px}.app-nav{padding:6px;gap:4px}.app-nav button{font-size:12px;padding:10px 7px}.card{border-radius:16px}.kpi{padding:15px}}
+
+/* ACVTC-CI V7 : texte blanc lisible sur le bandeau bleu de bienvenue. */
+.dashboard-home .card.hero h2,
+.dashboard-home .card.hero h2:first-child {
+  color: #fff;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.dashboard-home .card.hero p {
+  color: #f0f5ff;
+}
