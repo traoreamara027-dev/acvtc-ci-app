@@ -148,3 +148,13 @@ details.card[open] summary{padding-bottom:14px;border-bottom:1px solid var(--lin
 .iphone-install-foot{font-size:12px;color:#5d6c83;line-height:1.5;text-align:center;margin:12px 0 0}
 .iphone-install-foot a{color:#15569e}
 @media(max-width:400px){.iphone-install-sheet{padding:16px 13px}.iphone-install-brand h2{font-size:18px}.iphone-install-actions{grid-template-columns:1fr}.iphone-install-top{font-size:12px;padding:9px 8px}}
+
+
+@media(max-width:400px){
+  .app-header{gap:7px;padding:8px}
+  .app-header .app-brand{gap:7px}
+  .app-header .app-brand img{width:42px;height:42px}
+  .app-header .app-brand b{font-size:14px}
+  .app-header .app-brand small{display:none}
+  .header-actions{gap:5px}
+}
