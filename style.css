@@ -119,3 +119,32 @@ details.card[open] summary{padding-bottom:14px;border-bottom:1px solid var(--lin
 .dashboard-home .card.hero p {
   color: #f0f5ff;
 }
+
+
+/* ACVTC-CI V7 : installation iPhone guidée et accessible */
+[data-iphone-install-trigger][hidden],#iphone-install-dialog[hidden],#iphone-install-browser-advice[hidden]{display:none!important}
+.iphone-install-entry{margin:16px 0 0;padding:13px;background:#eff5fd;border:1px solid #c8d9ef;border-radius:14px;text-align:center}
+.iphone-install-entry p{margin:8px 0 0;font-size:13px;color:#435b79}
+.iphone-install-action{width:100%;background:#123e78;color:#fff}
+.iphone-install-top{background:#fff;color:#123e78;white-space:nowrap;padding:10px 12px}
+.iphone-install-overlay{position:fixed;inset:0;z-index:10000;background:rgba(11,25,52,.72);display:flex;align-items:center;justify-content:center;padding:14px}
+.iphone-install-sheet{position:relative;background:#fff;color:#172a46;width:min(100%,520px);max-height:calc(100dvh - 28px);overflow:auto;-webkit-overflow-scrolling:touch;border-radius:20px;padding:22px;box-shadow:0 22px 55px rgba(0,0,0,.2)}
+.iphone-install-close{position:absolute;right:10px;top:8px;width:40px;height:40px;border:0;background:transparent;color:#435b79;font-size:30px}
+.iphone-install-brand{display:flex;align-items:center;gap:12px;padding-right:22px}
+.iphone-install-brand img{border-radius:14px}
+.iphone-install-brand h2{font-size:20px;line-height:1.25;color:#12386e;margin:0 0 5px}
+.iphone-install-brand p{font-size:13px;line-height:1.5;color:#526681;margin:0}
+.iphone-install-advice{padding:11px;border-radius:12px;background:#fff6e8;border:1px solid #efd8b3;font-size:13px;line-height:1.5}
+.iphone-install-steps{padding:0;margin:18px 0;list-style:none;display:grid;gap:10px}
+.iphone-install-steps li{display:flex;gap:11px;align-items:flex-start;padding:11px;border:1px solid #dce5f0;border-radius:12px}
+.iphone-install-steps li>span{font-size:25px;flex:0 0 35px;text-align:center}
+.iphone-install-steps strong{display:block;color:#12386e;font-size:14px}
+.iphone-install-steps p{margin:3px 0 0;color:#526681;font-size:12px;line-height:1.5}
+.iphone-install-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.iphone-install-actions .btn{width:100%;margin:0;padding:11px 8px;font-size:13px}
+.iphone-install-sheet label{margin-top:14px}
+.iphone-install-sheet input{font-size:14px}
+#iphone-install-feedback{font-size:12px;color:#135f39;min-height:16px;margin:7px 0}
+.iphone-install-foot{font-size:12px;color:#5d6c83;line-height:1.5;text-align:center;margin:12px 0 0}
+.iphone-install-foot a{color:#15569e}
+@media(max-width:400px){.iphone-install-sheet{padding:16px 13px}.iphone-install-brand h2{font-size:18px}.iphone-install-actions{grid-template-columns:1fr}.iphone-install-top{font-size:12px;padding:9px 8px}}
