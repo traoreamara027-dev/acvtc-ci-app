@@ -120,7 +120,7 @@
     summaries = rep.data || [];
     if (!globalRead()) selectedSection = Number(profilActuel.section_id);
     if (selectedSection && !summaries.some(s => Number(s.section_id) === selectedSection)) selectedSection = null;
-    box.innerHTML = `<h2>Caisse nationale</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${canEditPaymentNumber() ? `<details><summary>Numéro officiel de paiement</summary><form id="cash-phone-form"><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Ajouter une opération de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="expense">Dépense</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
+    box.innerHTML = `<h2>Caisse nationale</h2>${globalRead() ? `<label for="cash-filter">Section consultée</label><select id="cash-filter" onchange="changerSectionFinancesV6(this.value)"><option value="">Toutes les sections</option>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === selectedSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select>` : `<h3>${esc(nomSection(profilActuel.section_id))}</h3>`}<div id="cash-summary"></div><p class="note">Les cotisations confirmées sont incluses dans les entrées. Ne les saisissez pas une deuxième fois dans la caisse. Le solde initial est un ajustement complémentaire aux cotisations déjà enregistrées.</p>${canEditPaymentNumber() ? `<details><summary>Numéro officiel de paiement</summary><form id="cash-phone-form"><label for="cash-phone">Numéro de paiement</label><input id="cash-phone" type="tel" inputmode="tel" required placeholder="Exemple : 0700000000"><button class="btn btn-primary" type="submit">Enregistrer le numéro</button><p id="cash-phone-current"></p></form></details><details open><summary>Enregistrer une entrée de caisse</summary><form id="cash-entry-form"><div class="form-grid"><div><label for="cash-entry-section">Section</label><select id="cash-entry-section" ${globalWrite() ? '' : 'disabled'}>${summaries.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === (selectedSection || Number(profilActuel.section_id)) ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}</select></div><div><label for="cash-kind">Opération</label><select id="cash-kind"><option value="income">Entrée d’argent</option><option value="opening">Solde initial complémentaire</option></select></div><div><label for="cash-amount">Montant (FCFA)</label><input id="cash-amount" type="number" min="1" max="1000000000000" step="1" required></div><div><label for="cash-date">Date</label><input id="cash-date" type="date" required value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label for="cash-reason">Motif</label><input id="cash-reason" required maxlength="500"></div><div class="full"><label for="cash-details">Détails</label><textarea id="cash-details" maxlength="3000"></textarea></div><div class="full"><label for="cash-receipt">Référence du reçu / justificatif</label><input id="cash-receipt" maxlength="500"></div></div><button class="btn btn-primary" type="submit">Enregistrer l’opération</button></form></details>` : ''}<h3>Journal des opérations de caisse</h3><div id="cash-entries"></div><div id="cash-pagination"></div>`;
     if (globalWrite()) {
       const rateBox = document.createElement('details');
       rateBox.className = 'card';
@@ -142,6 +142,56 @@
     }
     $('cash-phone-form')?.addEventListener('submit', savePhone);
     $('cash-entry-form')?.addEventListener('submit', saveEntry);
+
+    // V7 : rubrique de dépenses autonome, reliée au journal comptable existant.
+    const expensePanel = document.createElement('section');
+    expensePanel.id = 'cash-expense-panel-v7';
+    expensePanel.className = 'card';
+    const expenseSections = summaries.filter(s =>
+      globalWrite() || Number(s.section_id) === Number(profilActuel.section_id)
+    );
+    const defaultExpenseSection = selectedSection || Number(profilActuel.section_id);
+    expensePanel.innerHTML = `
+      <h2>Dépenses de l'association</h2>
+      <p class="note">Chaque dépense validée ici est enregistrée dans la caisse et déduite du solde affiché. Cette saisie ne transfère pas d'argent.</p>
+      ${write() ? `
+      <form id="cash-expense-form-v7">
+        <h3>Enregistrer une dépense</h3>
+        <div class="form-grid">
+          <div>
+            <label for="cash-expense-section-v7">Section concernée</label>
+            <select id="cash-expense-section-v7" required ${globalWrite() ? '' : 'disabled'}>
+              ${expenseSections.map(s => `<option value="${Number(s.section_id)}" ${Number(s.section_id) === defaultExpenseSection ? 'selected' : ''}>${esc(s.section_name)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label for="cash-expense-amount-v7">Montant dépensé (FCFA)</label>
+            <input id="cash-expense-amount-v7" type="number" min="1" max="1000000000000" step="1" required>
+          </div>
+          <div>
+            <label for="cash-expense-date-v7">Date de la dépense</label>
+            <input id="cash-expense-date-v7" type="date" required value="${new Date().toISOString().slice(0, 10)}">
+          </div>
+          <div>
+            <label for="cash-expense-reason-v7">Objet de la dépense</label>
+            <input id="cash-expense-reason-v7" type="text" maxlength="500" required placeholder="Transport, formation, matériel, aide sociale…">
+          </div>
+          <div class="full">
+            <label for="cash-expense-details-v7">Bénéficiaire et détails (facultatif)</label>
+            <textarea id="cash-expense-details-v7" maxlength="3000" placeholder="À qui et pour quoi la somme a été versée"></textarea>
+          </div>
+          <div class="full">
+            <label for="cash-expense-receipt-v7">Référence du reçu ou du justificatif (facultatif)</label>
+            <input id="cash-expense-receipt-v7" maxlength="500" placeholder="N° de reçu, facture, référence du paiement">
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">Enregistrer cette dépense</button>
+      </form>` : '<p class="note">Consultation uniquement : l’enregistrement est réservé au Président et aux trésoriers habilités.</p>'}
+      <h3>Historique des dépenses</h3>
+      <div id="cash-expense-history-v7" class="list" aria-live="polite">Chargement…</div>
+    `;
+    box.after(expensePanel);
+    $('cash-expense-form-v7')?.addEventListener('submit', saveExpenseV7);
     if (write()) {
       const cotis = document.createElement('details');
       cotis.open = true;
@@ -159,7 +209,7 @@
       await loadReadContributions();
     }
     entryPage = 0;
-    await Promise.all([refreshJournal(), canEditPaymentNumber() ? loadPhone() : Promise.resolve()]);
+    await Promise.all([refreshJournal(), refreshExpenseHistoryV7(), canEditPaymentNumber() ? loadPhone() : Promise.resolve()]);
   };
   async function loadContributionMembers() {
     const select = $('cash-member'); if (!select) return;
@@ -221,7 +271,79 @@
       toast('Opération enregistrée.'); await window.finances();
     } finally { button.disabled = false; }
   }
-  window.changerSectionFinancesV6 = async value => { selectedSection = value ? Number(value) : null; entryPage = 0; await refreshJournal(); };
+  async function saveExpenseV7(event) {
+    event.preventDefault();
+    if (!write()) return toast('Vous n’êtes pas autorisé à enregistrer une dépense.');
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    const sectionId = Number($('cash-expense-section-v7')?.value);
+    const amount = Number($('cash-expense-amount-v7')?.value);
+    const entryDate = $('cash-expense-date-v7')?.value || '';
+    const reason = $('cash-expense-reason-v7')?.value.trim() || '';
+    const details = $('cash-expense-details-v7')?.value.trim() || '';
+    const reference = $('cash-expense-receipt-v7')?.value.trim() || '';
+    if (!summaries.some(s => Number(s.section_id) === sectionId) ||
+        (!globalWrite() && sectionId !== Number(profilActuel.section_id))) {
+      return toast('Section de dépense non autorisée.');
+    }
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000000000 ||
+        !/^\\d{4}-\\d{2}-\\d{2}$/.test(entryDate) ||
+        !reason || reason.length > 500 || details.length > 3000 || reference.length > 500) {
+      return toast('Vérifiez les informations de cette dépense.');
+    }
+    if (button) button.disabled = true;
+    try {
+      const { error } = await supabaseClient.from('cash_entries_v6').insert({
+        section_id: sectionId, kind: 'expense', amount, entry_date: entryDate,
+        reason, details, receipt_reference: reference
+      });
+      if (error) throw error;
+      toast('Dépense enregistrée et intégrée au solde financier.');
+      await window.finances();
+    } catch (error) {
+      toast(error.message || 'Impossible d’enregistrer la dépense.', 6000);
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
+  async function refreshExpenseHistoryV7() {
+    const zone = $('cash-expense-history-v7');
+    if (!zone) return;
+    const section = selectedSection;
+    zone.textContent = 'Chargement…';
+    let query = supabaseClient.from('cash_entries_v6')
+      .select('id,section_id,amount,entry_date,reason,details,receipt_reference')
+      .eq('kind', 'expense')
+      .order('entry_date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(20);
+    if (section) query = query.eq('section_id', section);
+    const { data, error } = await query;
+    if (!zone.isConnected || section !== selectedSection) return;
+    if (error) {
+      zone.textContent = 'Impossible de charger les dépenses.';
+      return;
+    }
+    zone.innerHTML = (data || []).map(row => `
+      <article class="list-item">
+        <div>
+          <h4>${esc(row.reason)}</h4>
+          <p>${esc(row.entry_date)} · ${esc(nomSection(row.section_id))}</p>
+          ${row.details ? `<p style="white-space:pre-wrap">${esc(row.details)}</p>` : ''}
+          ${row.receipt_reference ? `<p>Justificatif : ${esc(row.receipt_reference)}</p>` : ''}
+        </div>
+        <strong>− ${fmt(row.amount)}</strong>
+      </article>`).join('') || '<p>Aucune dépense enregistrée pour cette section.</p>';
+  }
+
+  window.changerSectionFinancesV6 = async value => {
+    selectedSection = value ? Number(value) : null;
+    const input = $('cash-expense-section-v7');
+    if (input && selectedSection) input.value = String(selectedSection);
+    entryPage = 0;
+    await Promise.all([refreshJournal(), refreshExpenseHistoryV7()]);
+  };
   window.pageCaisseV6 = async direction => { entryPage = Math.max(0, entryPage + direction); await refreshJournal(); };
   async function refreshJournal() {
     const summary = $('cash-summary'), zone = $('cash-entries'), pagination = $('cash-pagination');
