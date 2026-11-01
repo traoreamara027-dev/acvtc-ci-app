@@ -4,11 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0D1B3D">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ACVTC-CI">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="description" content="Application officielle ACVTC-CI">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon-192.png">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=20261101-v7-president">
+  <link rel="stylesheet" href="/style.css?v=20261101-v7-ios">
+  <script src="/installation-iphone.js?v=20261101-v7-ios" defer></script>
   <title>ACVTC-CI V7</title>
 </head>
 
@@ -119,6 +123,10 @@
       </div>
 
 
+      <div class="iphone-install-entry" data-iphone-install-trigger hidden>
+        <button class="btn iphone-install-action" type="button" onclick="ouvrirGuideInstallationIphone()">📲 Installer ACVTC-CI sur iPhone</button>
+        <p>Ajoutez l'application à votre écran d'accueil, sans App Store.</p>
+      </div>
       <div class="auth-footer">
 
         <span>
@@ -244,6 +252,7 @@
 
 
       <div class="header-actions">
+        <button class="btn iphone-install-top" type="button" data-iphone-install-trigger hidden onclick="ouvrirGuideInstallationIphone()">📲 Installer</button>
 
         <div
           id="header-user"
@@ -281,6 +290,33 @@
 
   </section>
 
+
+
+  <!-- Guide d'installation partageable, disponible avant toute connexion -->
+  <div id="iphone-install-dialog" class="iphone-install-overlay" role="dialog" aria-modal="true" aria-labelledby="iphone-install-title" aria-describedby="iphone-install-intro" hidden>
+    <div class="iphone-install-sheet">
+      <button type="button" id="iphone-install-close" class="iphone-install-close" aria-label="Fermer le guide">×</button>
+      <div class="iphone-install-brand">
+        <img src="/icon-192.png" width="56" height="56" alt="Icône de l'ACVTC-CI">
+        <div><h2 id="iphone-install-title">Installer ACVTC-CI sur iPhone</h2><p id="iphone-install-intro">Retrouvez l'application directement sur votre écran d'accueil.</p></div>
+      </div>
+      <p id="iphone-install-browser-advice" class="iphone-install-advice" hidden>Si le navigateur ne propose pas l'installation, copiez le lien ci-dessous et ouvrez-le dans <strong>Safari</strong>.</p>
+      <ol class="iphone-install-steps">
+        <li><span aria-hidden="true">🌐</span><div><strong>Ouvrez le lien dans Safari.</strong><p>Aucune connexion n'est nécessaire pour installer l'application.</p></div></li>
+        <li><span aria-hidden="true">📤</span><div><strong>Touchez « Partager ».</strong><p>C'est l'icône carrée avec une flèche vers le haut, parfois accessible depuis le menu de la page.</p></div></li>
+        <li><span aria-hidden="true">➕</span><div><strong>Choisissez « Sur l'écran d'accueil ».</strong><p>Si l'option est absente, faites défiler puis touchez « Modifier les actions ».</p></div></li>
+        <li><span aria-hidden="true">✅</span><div><strong>Activez « Ouvrir comme app web », puis « Ajouter ».</strong><p>L'icône ACVTC-CI apparaîtra sur l'écran d'accueil de l'iPhone.</p></div></li>
+      </ol>
+      <div class="iphone-install-actions">
+        <button class="btn btn-primary" type="button" id="iphone-install-share">Partager le lien</button>
+        <button class="btn btn-light" type="button" id="iphone-install-copy">Copier le lien</button>
+      </div>
+      <label for="iphone-install-link">Lien à transmettre aux autres conducteurs</label>
+      <input id="iphone-install-link" type="url" readonly>
+      <p id="iphone-install-feedback" role="status" aria-live="polite"></p>
+      <p class="iphone-install-foot">Gratuit, sans App Store. <a href="https://support.apple.com/fr-ci/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Voir le guide officiel Apple</a>.</p>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
