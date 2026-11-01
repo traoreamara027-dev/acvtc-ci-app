@@ -287,7 +287,7 @@
       return toast('Section de dépense non autorisée.');
     }
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000000000 ||
-        !/^\\d{4}-\\d{2}-\\d{2}$/.test(entryDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(entryDate) ||
         !reason || reason.length > 500 || details.length > 3000 || reference.length > 500) {
       return toast('Vérifiez les informations de cette dépense.');
     }
