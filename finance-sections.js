@@ -114,6 +114,7 @@
     else content.innerHTML = '<div class="section-title"><h2>Finances ACVTC-CI</h2></div>';
     const box = document.createElement('div'); box.id = 'cash-section-panel'; box.className = 'card';
     box.innerHTML = '<h2>Caisse et dépenses</h2><p>Chargement…</p>'; content.prepend(box);
+    if (write()) window.installerCotisationsTresorerieV7(content);
     const rep = await supabaseClient.rpc('finance_summary_v6');
     if (!box.isConnected) return;
     if (rep.error) { box.innerHTML = '<p>Impossible de charger les finances. Réessayez.</p>'; return; }
@@ -192,17 +193,6 @@
     `;
     box.after(expensePanel);
     $('cash-expense-form-v7')?.addEventListener('submit', saveExpenseV7);
-    if (write()) {
-      const cotis = document.createElement('details');
-      cotis.open = true;
-      cotis.innerHTML = `<summary>Enregistrer une cotisation reçue</summary><form id="cash-contribution-form"><label for="cash-member-search">Rechercher un membre</label><input id="cash-member-search" type="search" placeholder="Saisir le nom ou le prénom" autocomplete="off" aria-describedby="cash-member-results" disabled><p id="cash-member-results" class="note" role="status" aria-live="polite">Chargement des membres…</p><label for="cash-member">Membre à créditer</label><select id="cash-member" required disabled><option value="">Chargement…</option></select><label for="cash-period">Mois de cotisation</label><input id="cash-period" type="month" required value="${new Date().toISOString().slice(0,7)}"><label for="cash-contribution-amount">Cotisation (FCFA)</label><input id="cash-contribution-amount" type="number" min="1" max="2147483647" step="1" required><label for="cash-penalty">Pénalité (FCFA)</label><input id="cash-penalty" type="number" min="0" max="2147483647" step="1" required value="0"><label for="cash-method">Moyen de paiement</label><select id="cash-method"><option value="ESPECES">Espèces — remise en main propre</option><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option></select><button class="btn btn-primary" type="submit">Confirmer la cotisation reçue</button></form>`;
-      box.append(cotis);
-      $('cash-contribution-form').addEventListener('submit', saveContribution);
-      await loadContributionMembers();
-      const rate = await supabaseClient.rpc('monthly_due_v5',{p_period:new Date().toISOString().slice(0,7)+'-01',p_as_of:new Date().toISOString().slice(0,10)});
-      const currentRate = Array.isArray(rate.data) ? rate.data[0] : rate.data;
-      if ($('cash-contribution-amount') && currentRate) $('cash-contribution-amount').value = currentRate.base_amount;
-    }
     if (!write()) {
       const history = document.createElement('div'); history.id = 'cash-contributions-read';
       box.append(history);
@@ -211,66 +201,6 @@
     entryPage = 0;
     await Promise.all([refreshJournal(), refreshExpenseHistoryV7(), canEditPaymentNumber() ? loadPhone() : Promise.resolve()]);
   };
-  async function loadContributionMembers() {
-    const select = $('cash-member'); if (!select) return;
-    const search = $('cash-member-search'), status = $('cash-member-results');
-    const normalize = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').trim();
-    const members = [];
-    try {
-      // Read every page, with a stable tie-breaker for members sharing a name.
-      // Existing section restrictions and RLS still apply to each request.
-      for (let offset = 0; ; ) {
-        let query = supabaseClient.from('members_v5').select('id,nom_complet,section_id')
-          .eq('actif', true).order('nom_complet').order('id').range(offset, offset + 499);
-        if (!globalWrite()) query = query.eq('section_id', profilActuel.section_id);
-        const rep = await query;
-        if (!select.isConnected) return;
-        if (rep.error) throw rep.error;
-        const page = rep.data || [];
-        if (!page.length) break;
-        members.push(...page);
-        offset += page.length;
-      }
-      const render = () => {
-        const previous = select.value;
-        const terms = normalize(search.value).split(/\s+/).filter(Boolean);
-        const matches = members.filter(m => terms.every(term => normalize(m.nom_complet).includes(term)));
-        select.innerHTML = '<option value="">' + (matches.length ? 'Choisir un membre' : 'Aucun membre trouvé') + '</option>' +
-          matches.map(m => `<option value="${esc(m.id)}">${esc(m.nom_complet)} — ${esc(nomSection(m.section_id))}</option>`).join('');
-        // Never silently choose a beneficiary when filtering the list.
-        select.value = matches.some(m => String(m.id) === previous) ? previous : '';
-        status.textContent = matches.length ? `${matches.length} membre(s) trouvé(s). Choisissez le membre à créditer.` :
-          'Aucun membre trouvé. Vérifiez le nom ou effacez la recherche.';
-      };
-      search.disabled = false;
-      select.disabled = false;
-      search.addEventListener('input', render);
-      render();
-    } catch (_) {
-      if (!select.isConnected) return;
-      select.innerHTML = '<option value="">Liste indisponible</option>';
-      status.textContent = 'Impossible de charger les membres. Rouvrez Finances pour réessayer.';
-      toast('Liste des membres indisponible.');
-    }
-  }
-
-  async function saveContribution(e) {
-    e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true;
-    try {
-      const memberId=$('cash-member').value, period=$('cash-period').value+'-01';
-      if (!memberId || $('cash-member').disabled) return toast('Recherchez et sélectionnez un membre avant de confirmer.');
-      const [existing,pending]=await Promise.all([
-        supabaseClient.from('contributions_v5').select('status').eq('member_id',memberId).eq('period',period).maybeSingle(),
-        supabaseClient.from('payment_declarations_v5').select('id').eq('member_id',memberId).eq('period',period).eq('status','PENDING').limit(1)
-      ]);
-      if(existing.error||pending.error)return toast('Vérification indisponible. Réessayez avant d’enregistrer.');
-      if(existing.data?.status==='payé')return toast('Cette cotisation est déjà confirmée. Aucun doublon ajouté.');
-      if(pending.data?.length)return toast('Un versement est déjà déclaré pour ce mois. Vérifiez-le dans les paiements en attente.');
-      const rep = await supabaseClient.rpc('record_contribution_v5', {p_member_id:$('cash-member').value,p_period:$('cash-period').value+'-01',p_amount:Number($('cash-contribution-amount').value),p_penalty:Number($('cash-penalty').value),p_status:'payé',p_payment_method:$('cash-method').value});
-      if (rep.error) return toast('Cotisation refusée : '+rep.error.message,6000);
-      toast('Cotisation confirmée et intégrée au solde.'); await window.finances();
-    } finally { button.disabled = false; }
-  }
   async function loadReadContributions() {
     const zone = $('cash-contributions-read'); if (!zone) return;
     const rep = await supabaseClient.from('contributions_v5').select('period,amount,penalty,status,members_v5(nom_complet,section_id)').eq('status','payé').order('period',{ascending:false}).limit(100);

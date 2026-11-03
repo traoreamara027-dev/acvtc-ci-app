@@ -1,5 +1,5 @@
-const CACHE='acvtc-v7-ios-easy-1';
-const ASSETS=['/','/index.html','/style.css?v=20261103-v7-ios-easy','/app.js?v=20261101-v7-president','/modules-v51.js?v=20261103-v7-member-search','/v6.js?v=20261024-v7','/v6-extras.js?v=20261024-v7','/finance-sections.js?v=20261103-v7-member-search','/v6-notifications.js?v=20261024-v7','/v7.js?v=20261024-v7','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json','/installation-iphone.js?v=20261103-v7-ios-easy'];
+const CACHE='acvtc-v7-periods-1';
+const ASSETS=['/cotisations-tresorerie.js?v=20261103-periods','/','/index.html','/style.css?v=20261103-v7-periods','/app.js?v=20261101-v7-president','/modules-v51.js?v=20261103-v7-periods','/v6.js?v=20261024-v7','/v6-extras.js?v=20261024-v7','/finance-sections.js?v=20261103-v7-periods','/v6-notifications.js?v=20261024-v7','/v7.js?v=20261024-v7','/logo-acvtc.png','/icon-192.png','/icon-512.png','/manifest.json','/installation-iphone.js?v=20261103-v7-ios-easy'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))])));
 self.addEventListener('fetch',e=>{
