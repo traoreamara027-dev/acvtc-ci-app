@@ -20,7 +20,7 @@
     extra.async = false;
     extra.onload = function () {
       const finance = document.createElement('script');
-      finance.src = '/finance-sections.js?v=20261101-v7-expenses';
+      finance.src = '/finance-sections.js?v=20261103-v7-member-search';
       finance.onload = function () {
         const v7 = document.createElement('script');
         v7.src = '/v7.js?v=20261024-v7';
