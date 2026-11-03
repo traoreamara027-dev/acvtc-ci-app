@@ -4,7 +4,7 @@
   const agent = navigator.userAgent || '';
   const iphone = /iPad|iPhone|iPod/i.test(agent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const safari = /Safari/i.test(agent) && !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|GSA|Instagram|FBAN|FBAV/i.test(agent);
+  const safari = /Safari/i.test(agent) && !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|GSA|Instagram|FBAN|FBAV|WhatsApp|Line/i.test(agent);
   const installed = navigator.standalone === true ||
     Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
   const installLink = new URL('/', window.location.origin);
@@ -18,8 +18,12 @@
     const dialog = el('iphone-install-dialog');
     if (!dialog) return;
     previousFocus = document.activeElement;
+    el('iphone-install-coach').hidden = true;
     el('iphone-install-link').value = installLink.toString();
     el('iphone-install-browser-advice').hidden = iphone && safari;
+    const inSafari = iphone && safari;
+    el('iphone-install-start').textContent = inSafari ? 'Commencer l’installation' : 'Copier le lien pour Safari';
+    el('iphone-install-start-help').textContent = inSafari ? 'Le guide se ferme pour vous laisser utiliser les boutons de Safari.' : 'Ouvrez ensuite Safari et collez le lien dans la barre d’adresse.';
     feedback('');
     dialog.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -39,12 +43,13 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
         await navigator.clipboard.writeText(link);
-        feedback('Lien copié : vous pouvez l’envoyer sur WhatsApp.');
+        feedback('Lien copié. Ouvrez Safari, collez le lien dans la barre d’adresse et validez.');
         return;
       } catch (_) {}
     }
     const input = el('iphone-install-link');
-    input.focus(); input.select();
+    input.closest('details').open = true;
+    input.focus(); input.select(); input.setSelectionRange(0, input.value.length);
     feedback('Lien sélectionné : touchez « Copier » dans le menu.');
   }
   async function partager() {
@@ -60,12 +65,23 @@
     }
     await copier();
   }
+  async function commencer() {
+    if (!(iphone && safari)) { await copier(); return; }
+    fermer();
+    // Safari owns Add to Home Screen. Keep the browser toolbar accessible.
+    const coach = el('iphone-install-coach');
+    coach.hidden = false;
+    el('iphone-install-coach-guide').focus();
+  }
   function init() {
     if (iphone && !installed) document.querySelectorAll('[data-iphone-install-trigger]').forEach(node => { node.hidden = false; });
     if (installed) return;
     const close = el('iphone-install-close'), dialog = el('iphone-install-dialog');
     if (!close || !dialog) return;
     close.addEventListener('click', fermer);
+    el('iphone-install-start').addEventListener('click', commencer);
+    el('iphone-install-coach-close').addEventListener('click', () => { el('iphone-install-coach').hidden = true; });
+    el('iphone-install-coach-guide').addEventListener('click', () => { ouvrir(); el('iphone-install-full-guide').open = true; });
     el('iphone-install-copy').addEventListener('click', copier);
     el('iphone-install-share').addEventListener('click', partager);
     dialog.addEventListener('click', event => { if (event.target === dialog) fermer(); });

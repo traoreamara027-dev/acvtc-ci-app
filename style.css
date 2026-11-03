@@ -158,3 +158,18 @@ details.card[open] summary{padding-bottom:14px;border-bottom:1px solid var(--lin
   .app-header .app-brand small{display:none}
   .header-actions{gap:5px}
 }
+
+/* Aide compacte : les commandes de Safari restent accessibles. */
+#iphone-install-coach[hidden]{display:none!important}
+.iphone-install-explanation{font-size:15px;line-height:1.5;margin:18px 0 12px}
+.iphone-install-start{width:100%;min-height:50px;font-size:16px;margin:0}
+.iphone-install-guide{border-top:1px solid #dce5f0;padding:14px 0 0;margin-top:14px}
+.iphone-install-guide summary{cursor:pointer;color:#123e78;font-weight:700;min-height:30px}
+.iphone-install-steps li{border:0;border-radius:0;padding:8px 0;cursor:default}
+.iphone-install-steps li>span{font-size:17px;font-weight:700;background:#edf3fc;border-radius:50%;flex:0 0 30px;line-height:30px}
+.iphone-install-coach{position:fixed;top:max(10px,env(safe-area-inset-top));left:12px;right:12px;margin:0 auto;max-width:480px;max-height:65dvh;overflow:auto;z-index:9999;background:#fff;color:#172a46;border:2px solid #123e78;border-radius:16px;padding:14px;box-shadow:0 8px 30px #0d1b3d40}
+.iphone-install-coach-title{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#123e78}
+.iphone-install-coach-title button{border:0;background:#eef3fa;color:#123e78;border-radius:50%;min-width:44px;min-height:44px;font-size:26px;cursor:pointer}
+.iphone-install-coach p{font-size:15px;line-height:1.5;margin:8px 0}
+.iphone-install-coach svg{vertical-align:middle;color:#123e78;margin-right:6px}
+.iphone-install-coach .btn{min-height:44px;margin:4px 0 0}
