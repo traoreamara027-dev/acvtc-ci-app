@@ -60,7 +60,9 @@
         const params=parameters();
         if(!params){$('treasury-quote').textContent='Choisissez une date valide et entre 1 et 60 mois.';return;}
         $('treasury-quote').textContent='Vérification des mois et du montant…';
-        const rep=await supabaseClient.rpc('contribution_period_quote_v7',params).catch(()=>({error:{message:'Vérifiez votre connexion.'}}));
+        let rep;
+        try { rep=await supabaseClient.rpc('contribution_period_quote_v7',params); }
+        catch (_) { rep={error:{message:'Vérifiez votre connexion.'}}; }
         if(!root.isConnected||generation!==formGeneration||version!==quoteVersion)return;
         if(rep.error){$('treasury-quote').innerHTML='<p>Calcul indisponible. Vérifiez votre connexion.</p><button type="button" class="btn btn-light" id="treasury-retry-quote">Réessayer</button>';$('treasury-retry-quote').onclick=updateQuote;return;}
         const rows=rep.data||[];
